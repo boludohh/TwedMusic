@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TwedMusicr</string>
+    <string name="app_name">TwedMusic</string>
     <string name="main_placeholder">Pantalla principal</string>
     <string name="main_songs_count">%1$d pistas</string>
     <string name="main_artists_count">%1$d artistas</string>

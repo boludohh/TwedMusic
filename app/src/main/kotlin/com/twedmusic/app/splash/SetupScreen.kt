@@ -402,7 +402,7 @@ fun SetupScreen(
                 .alpha(iconAlpha)
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_chevron_left),
+                painter = painterResource(R.drawable.ic_arrow_back_ios),
                 contentDescription = stringResource(R.string.back_button),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
