@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:scaleX="0.0675"
+        android:scaleY="0.0675"
+        android:translateX="24.81"
+        android:translateY="21.60">
+
+        <!-- Small bar -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M153.75,431.25 C153.75,407.44 173.06,388.13 196.88,388.13 C220.69,388.13 240,407.44 240,431.25 L240,528.75 C240,552.56 220.69,571.88 196.88,571.88 C173.06,571.88 153.75,552.56 153.75,528.75 Z"/>
+
+        <!-- Medium bar -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M262.5,350.63 C262.5,326.81 281.81,305.63 305.63,305.63 C329.44,305.63 348.75,326.81 348.75,350.63 L348.75,609.38 C348.75,633.19 329.44,652.5 305.63,652.5 C281.81,652.5 262.5,633.19 262.5,609.38 Z"/>
+
+        <!-- Tall bar -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M371.25,258.75 C371.25,234.94 390.56,215.63 414.38,215.63 C438.19,215.63 457.5,234.94 457.5,258.75 L457.5,701.25 C457.5,725.06 438.19,744.38 414.38,744.38 C390.56,744.38 371.25,725.06 371.25,701.25 Z"/>
+
+        <!-- Rounded play mark with circular tip -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M483.75,269.44 A11.25,11.25 0 0 1 501.56,260.25 L711.19,411.56 A84.38,84.38 0 0 1 711.19,548.44 L501.56,699.75 A11.25,11.25 0 0 1 483.75,690.56 Z"/>
+    </group>
+</vector>

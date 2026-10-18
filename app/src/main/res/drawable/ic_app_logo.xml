@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+
+    <!-- Rounded square background (launcher-style squircle) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M220,0 H740 A220,220 0 0 1 960,220 V740 A220,220 0 0 1 740,960 H220 A220,220 0 0 1 0,740 V220 A220,220 0 0 1 220,0 Z"/>
+
+    <!-- Small bar -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M183.77,431.25 C183.77,407.44 203.08,388.13 226.9,388.13 C250.71,388.13 270.02,407.44 270.02,431.25 L270.02,528.75 C270.02,552.56 250.71,571.88 226.9,571.88 C203.08,571.88 183.77,552.56 183.77,528.75 Z"/>
+
+    <!-- Medium bar -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M292.52,350.63 C292.52,326.81 311.83,305.63 335.65,305.63 C359.46,305.63 378.77,326.81 378.77,350.63 L378.77,609.38 C378.77,633.19 359.46,652.5 335.65,652.5 C311.83,652.5 292.52,633.19 292.52,609.38 Z"/>
+
+    <!-- Tall bar -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M401.27,258.75 C401.27,234.94 420.58,215.63 444.4,215.63 C468.21,215.63 487.52,234.94 487.52,258.75 L487.52,701.25 C487.52,725.06 468.21,744.38 444.4,744.38 C420.58,744.38 401.27,725.06 401.27,701.25 Z"/>
+
+    <!-- Rounded play mark with circular tip -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M513.77,269.44 A11.25,11.25 0 0 1 531.58,260.25 L741.21,411.56 A84.38,84.38 0 0 1 741.21,548.44 L531.58,699.75 A11.25,11.25 0 0 1 513.77,690.56 Z"/>
+</vector>

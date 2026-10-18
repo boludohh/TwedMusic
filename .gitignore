@@ -1,0 +1,17 @@
+# Keystore
+*.jks
+*.keystore
+
+# Base64 del keystore (para el secreto de GitHub, NUNCA versionar)
+keystore-base64.txt
+
+# Propiedades del keystore
+app/keystore.properties
+
+# Propiedades locales (claves de API, NUNCA versionar)
+local.properties
+
+# Archivos de sistema / IDE
+.DS_Store
+*.iml
+.idea/
