@@ -4,7 +4,7 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
-    <!-- Tema exclusivo para SplashActivity.
+    <!-- Tema exclusivo para OnboardingActivity.
          windowBackground blanco (#FFFFFF) coincide con LightBackground,
          eliminando el parpadeo blanco antes de que onCreate() esté listo.
          En modo oscuro se usa la variante de values-night/. -->

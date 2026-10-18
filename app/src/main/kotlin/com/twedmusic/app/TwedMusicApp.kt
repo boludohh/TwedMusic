@@ -1,15 +1,14 @@
 package com.twedmusic.app
 
 import android.app.Application
-import com.twedmusic.app.data.AppPreferences
-import com.twedmusic.app.data.db.AppDatabase
-import com.twedmusic.app.data.media.ArtistImageRepository
-import com.twedmusic.app.data.media.AudioRepository
-import com.twedmusic.app.data.media.CoverRepository
-import com.twedmusic.app.data.media.PlaybackHistoryRepository
-import com.twedmusic.app.data.media.PlaylistRepository
-import com.twedmusic.app.playback.PlaybackController
-
+import com.twedmusic.app.core.datastore.AppPreferences
+import com.twedmusic.app.core.database.AppDatabase
+import com.twedmusic.app.core.data.repository.ArtistImageRepository
+import com.twedmusic.app.core.data.repository.AudioRepository
+import com.twedmusic.app.core.data.repository.CoverRepository
+import com.twedmusic.app.core.data.repository.PlaybackHistoryRepository
+import com.twedmusic.app.core.data.repository.PlaylistRepository
+import com.twedmusic.app.feature.playback.PlaybackController
 /**
  * Application class personalizada de TwedMusic.
  *

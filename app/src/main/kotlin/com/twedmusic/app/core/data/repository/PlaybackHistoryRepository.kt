@@ -1,0 +1,177 @@
+package com.twedmusic.app.core.data.repository
+
+import com.twedmusic.app.core.database.AppDatabase
+import com.twedmusic.app.core.database.PlayStatsDao
+import com.twedmusic.app.core.database.SongDao
+import com.twedmusic.app.core.database.TotalStats
+import com.twedmusic.app.core.model.Song
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+
+/**
+ * Repositorio de historial de reproducción: orquesta el registro de
+ * eventos de reproducción y expone Flows reactivos de estadísticas
+ * agregadas, top artista/pista y canciones recientes.
+ *
+ * ## Datos de actividad del usuario
+ * Las estadísticas de reproducción son DATOS DEL USUARIO (no caché
+ * reconstruible). La migración 6→7 de AppDatabase preserva esta
+ * tabla entre versiones de la app.
+ *
+ * ## Lógica de sesión
+ * El repositorio mantiene una sesión en memoria (songId + posición
+ * inicial + timestamp de inicio) para calcular el delta de tiempo
+ * escuchado. Al pausar, seek, cambiar de canción o terminar la
+ * reproducción, se calcula el delta y se acumula en playedMs.
+ *
+ * ## Tracking en tiempo real
+ * [accumulatePlayedMs] permite al servicio de reproducción sumar
+ * deltas pequeños (ej. cada 1 segundo) directamente a playedMs,
+ * garantizando que el tiempo escuchado se actualice en tiempo real
+ * en la UI sin esperar a que el usuario pause o cambie de canción.
+ *
+ * ## Flows reactivos
+ * - [totalStats]: suma de playCount, completedCount y playedMs.
+ * - [topTrack]: canción con más playCount.
+ * - [topArtist]: artista con más playCount acumulado.
+ * - [recentlyPlayed]: últimas N canciones reproducidas.
+ *
+ * Todos los Flows se re-emiten automáticamente cuando play_stats
+ * cambia, por lo que la UI no necesita refrescar manualmente.
+ */
+class PlaybackHistoryRepository(
+    private val appDatabase: AppDatabase
+) {
+    private val playStatsDao: PlayStatsDao = appDatabase.playStatsDao()
+    private val songDao: SongDao = appDatabase.songDao()
+
+    // =========================================================================
+    // Sesión en memoria
+    // =========================================================================
+
+    /** Sesión activa: songId, posición al iniciar, timestamp de inicio. */
+    private var currentSession: PlaybackSession? = null
+
+    private data class PlaybackSession(
+        val songId: Long,
+        val startPositionMs: Long,
+        val startTimeMs: Long
+    )
+
+    // =========================================================================
+    // API pública: registro de eventos
+    // =========================================================================
+
+    /**
+     * Registra el inicio de reproducción de una canción.
+     * Incrementa playCount en 1 y actualiza lastPlayedAt.
+     * Inicia una nueva sesión para tracking de tiempo.
+     *
+     * Se llama cuando Media3 reporta una transición de MediaItem
+     * (después de que BASS creó el stream exitosamente).
+     *
+     * @param songId ID de la canción (MediaStore._ID).
+     * @param startPositionMs Posición de inicio en milisegundos
+     *        (normalmente 0, pero puede ser > 0 si se reanuda).
+     */
+    suspend fun recordPlayStart(songId: Long, startPositionMs: Long = 0L) {
+        val now = System.currentTimeMillis()
+        playStatsDao.incrementPlayCount(songId, now)
+        currentSession = PlaybackSession(songId, startPositionMs, now)
+    }
+
+    /**
+     * Registra que la canción se reprodujo completamente.
+     * Incrementa completedCount en 1.
+     *
+     * Solo debe llamarse cuando la canción termina naturalmente
+     * (sin seek al final) y se reprodujo al menos el 90% de su duración.
+     * El servicio de reproducción es responsable de esta validación.
+     *
+     * @param songId ID de la canción.
+     */
+    suspend fun recordCompleted(songId: Long) {
+        playStatsDao.incrementCompletedCount(songId)
+    }
+
+    /**
+     * Finaliza la sesión actual y acumula el delta de tiempo escuchado
+     * en playedMs. Se llama al pausar, seek, cambiar de canción o
+     * terminar la reproducción.
+     *
+     * @param currentPositionMs Posición actual de reproducción en
+     *        milisegundos (desde el inicio de la canción).
+     */
+    suspend fun flushSession(currentPositionMs: Long) {
+        val session = currentSession ?: return
+        val deltaMs = currentPositionMs - session.startPositionMs
+        if (deltaMs > 0) {
+            playStatsDao.addPlayedMs(session.songId, deltaMs)
+        }
+        currentSession = null
+    }
+
+    /**
+     * Acumula deltaMs de tiempo escuchado en playedMs de forma
+     * incremental. Diseñado para ser llamado periódicamente por el
+     * servicio de reproducción (ej. cada 1 segundo) para mantener
+     * las estadísticas actualizadas en tiempo real.
+     *
+     * A diferencia de [flushSession], NO reinicia la sesión y puede
+     * llamarse múltiples veces mientras la canción sigue sonando.
+     *
+     * @param songId ID de la canción en reproducción.
+     * @param deltaMs Milisegundos a acumular (delta desde la última lectura).
+     */
+    suspend fun accumulatePlayedMs(songId: Long, deltaMs: Long) {
+        if (deltaMs <= 0) return
+        playStatsDao.accumulatePlayedMs(songId, deltaMs)
+    }
+
+    // =========================================================================
+    // API pública: Flows reactivos
+    // =========================================================================
+
+    /**
+     * Estadísticas agregadas totales: suma de playCount, completedCount
+     * y playedMs de todas las canciones. Se re-emite cuando play_stats
+     * cambia.
+     */
+    val totalStats: Flow<TotalStats> = playStatsDao.getTotalStats()
+        .flowOn(Dispatchers.IO)
+
+    /**
+     * Canción más reproducida (por playCount), resuelta a [Song].
+     * Si no hay estadísticas, emite null.
+     */
+    val topTrack: Flow<Song?> = playStatsDao.getTopTrackId()
+        .map { songId ->
+            songId?.let { songDao.getById(it)?.toSong() }
+        }
+        .flowOn(Dispatchers.IO)
+
+    /**
+     * Artista más reproducido (por suma de playCount de sus canciones).
+     * Si no hay estadísticas, emite null.
+     */
+    val topArtist: Flow<String?> = playStatsDao.getTopArtist()
+        .flowOn(Dispatchers.IO)
+
+    /**
+     * Últimas [limit] canciones reproducidas, ordenadas por
+     * lastPlayedAt descendente. Si no hay estadísticas, emite lista
+     * vacía.
+     */
+    fun getRecentlyPlayed(limit: Int = 5): Flow<List<Song>> =
+        playStatsDao.getRecentlyPlayedIds(limit)
+            .map { ids ->
+                if (ids.isEmpty()) return@map emptyList()
+                val entities = songDao.getByIds(ids)
+                val byId = entities.associateBy { it.id }
+                ids.mapNotNull { byId[it]?.toSong() }
+            }
+            .flowOn(Dispatchers.IO)
+}

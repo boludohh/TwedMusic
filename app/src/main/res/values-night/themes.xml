@@ -1,5 +1,5 @@
 <resources>
-    <!-- Variante oscura del tema base para SplashActivity y MainActivity.
+    <!-- Variante oscura del tema base para OnboardingActivity y MainActivity.
          Hereda de Theme.Material.NoActionBar (la versión oscura del tema
          Material base), garantizando que los recursos del sistema y los
          atributos por defecto usen la paleta oscura. -->

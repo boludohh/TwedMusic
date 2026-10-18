@@ -28,7 +28,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ComposeEmptyActivity">
         <activity
-            android:name=".splash.SplashActivity"
+            android:name=".feature.onboarding.OnboardingActivity"
             android:exported="true"
             android:theme="@style/Theme.Splash">
             <intent-filter>
@@ -37,11 +37,11 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".MainActivity"
+            android:name=".feature.main.MainActivity"
             android:exported="false"
             android:theme="@style/Theme.ComposeEmptyActivity" />
         <service
-            android:name=".playback.service.PlaybackService"
+            android:name=".feature.playback.service.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
