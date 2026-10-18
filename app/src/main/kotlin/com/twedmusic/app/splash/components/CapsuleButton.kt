@@ -91,7 +91,7 @@ fun CapsuleButton(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_arrow_forward),
+                        painter = painterResource(R.drawable.ic_chevron_right),
                         contentDescription = null,
                         tint = contentColor,
                         modifier = Modifier.size(18.dp)

@@ -269,7 +269,7 @@ internal fun PlaylistRow(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_playlist_filled),
+                painter = painterResource(id = R.drawable.ic_playlist_play),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)

@@ -60,7 +60,7 @@ fun AlbumDetailTopBar(
             modifier = Modifier.size(42.dp)
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_arrow_back),
+                painter = painterResource(id = R.drawable.ic_chevron_left),
                 contentDescription = stringResource(R.string.album_detail_cd_back),
                 tint = iconColor,
                 modifier = Modifier.size(22.dp)

@@ -119,11 +119,11 @@ private fun NavIcon(
     )
 
     val (outlineRes, filledRes) = when (tab) {
-        NavTab.HOME -> R.drawable.ic_nav_home_outline to R.drawable.ic_nav_home_filled
-        NavTab.TRACKS -> R.drawable.ic_nav_music_outline to R.drawable.ic_nav_music_filled
-        NavTab.ALBUMS -> R.drawable.ic_nav_albums_outline to R.drawable.ic_nav_albums_filled
-        NavTab.ARTISTS -> R.drawable.ic_nav_artists_outline to R.drawable.ic_nav_artists_filled
-        NavTab.PLAYLISTS -> R.drawable.ic_nav_playlist_outline to R.drawable.ic_nav_playlist_filled
+        NavTab.HOME -> R.drawable.ic_home_outline to R.drawable.ic_home_filled
+        NavTab.TRACKS -> R.drawable.ic_music_note_outline to R.drawable.ic_music_note_filled
+        NavTab.ALBUMS -> R.drawable.ic_album_outline to R.drawable.ic_album_filled
+        NavTab.ARTISTS -> R.drawable.ic_artist_outline to R.drawable.ic_artist_filled
+        NavTab.PLAYLISTS -> R.drawable.ic_playlist_play to R.drawable.ic_playlist_play
     }
 
     Box(

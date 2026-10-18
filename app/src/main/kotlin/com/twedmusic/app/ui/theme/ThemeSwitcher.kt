@@ -340,8 +340,8 @@ fun ThemeToggleButton(
             animationSpec = tween(durationMillis = 200)
         ) { theme ->
             val iconRes = when (theme) {
-                ThemeMode.LIGHT -> R.drawable.ic_sun_light
-                ThemeMode.DARK -> R.drawable.ic_moon_dark
+                ThemeMode.LIGHT -> R.drawable.ic_light_mode_filled
+                ThemeMode.DARK -> R.drawable.ic_dark_mode_filled
             }
 
             Icon(

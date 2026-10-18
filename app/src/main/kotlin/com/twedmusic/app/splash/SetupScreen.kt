@@ -181,7 +181,7 @@ fun SetupScreen(
     val permissionCards = buildList {
         add(
             PermissionCardSpec(
-                icon = R.drawable.ic_music_note,
+                icon = R.drawable.ic_music_note_filled,
                 title = stringResource(R.string.permission_library_title),
                 body = stringResource(R.string.permission_library_body),
                 permissionState = if (audioGranted) PermissionState.GRANTED else PermissionState.DENIED,
@@ -208,7 +208,7 @@ fun SetupScreen(
         if (notificationPermission != null) {
             add(
                 PermissionCardSpec(
-                    icon = R.drawable.ic_notifications,
+                    icon = R.drawable.ic_notifications_filled,
                     title = stringResource(R.string.permission_notifications_title),
                     body = stringResource(R.string.permission_notifications_body),
                     permissionState = if (notificationGranted) PermissionState.GRANTED else PermissionState.DENIED,
@@ -220,7 +220,7 @@ fun SetupScreen(
         }
         add(
             PermissionCardSpec(
-                icon = R.drawable.ic_battery,
+                icon = R.drawable.ic_battery_full,
                 title = stringResource(R.string.permission_battery_title),
                 body = stringResource(R.string.permission_battery_body),
                 permissionState = if (batteryIgnored) PermissionState.GRANTED else PermissionState.DENIED,
@@ -272,7 +272,7 @@ fun SetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_shield),
+                painter = painterResource(R.drawable.ic_security),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.inverseOnSurface,
                 modifier = Modifier.size(48.dp)
@@ -302,7 +302,7 @@ fun SetupScreen(
 
             if (PermissionHandler.showsAndroid13Notice()) {
                 SplashCard(
-                    icon = R.drawable.ic_info,
+                    icon = R.drawable.ic_info_filled,
                     title = stringResource(R.string.android13_notice_title),
                     body = stringResource(R.string.android13_notice_body)
                 )
@@ -402,7 +402,7 @@ fun SetupScreen(
                 .alpha(iconAlpha)
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_arrow_back),
+                painter = painterResource(R.drawable.ic_chevron_left),
                 contentDescription = stringResource(R.string.back_button),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

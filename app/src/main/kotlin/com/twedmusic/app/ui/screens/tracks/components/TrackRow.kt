@@ -87,7 +87,7 @@ private val CurrentTrackBorderCorner = 12.dp
  *   Coil desde el archivo de portada extraído por TagLib durante
  *   el escaneo. Si la canción no tiene portada, se muestra un
  *   placeholder con fondo `surfaceVariant` y el icono
- *   [R.drawable.ic_nav_music_filled] centrado (26dp).
+ *   [R.drawable.ic_music_note_filled] centrado (26dp).
  * - **Textos** (centro): título (16sp) a 10dp del tope del
  *   contenedor, artista (13sp) 4dp debajo del título.
  *   Ambos con recorte visual con "..." si superan el límite de
@@ -267,7 +267,7 @@ fun TrackRow(
         ) {
             // Icono placeholder (siempre dibujado debajo)
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_music_filled),
+                painter = painterResource(id = R.drawable.ic_music_note_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
                 modifier = Modifier.size(26.dp)

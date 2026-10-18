@@ -34,11 +34,11 @@ import kotlin.random.Random
  * una sola vez en la pantalla (no se repiten).
  */
 private val floatingIconResources = listOf(
-    R.drawable.ic_float_disc,        // disco de vinilo
-    R.drawable.ic_float_note,        // doble nota musical
-    R.drawable.ic_float_headphones,  // audífonos
-    R.drawable.ic_float_equalizer,   // barras de ecualizador
-    R.drawable.ic_float_headset      // headset/diadema
+    R.drawable.ic_album_filled,        // disco de vinilo
+    R.drawable.ic_music_note2,        // doble nota musical
+    R.drawable.ic_earbud2_filled,  // audífonos
+    R.drawable.ic_equalizer,   // barras de ecualizador
+    R.drawable.ic_headphones_filled      // headset/diadema
 )
 
 /**

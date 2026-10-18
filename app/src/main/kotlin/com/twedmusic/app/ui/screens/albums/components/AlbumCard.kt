@@ -153,7 +153,7 @@ fun AlbumCard(
         ) {
             // Icono placeholder (siempre dibujado debajo)
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_albums_filled),
+                painter = painterResource(id = R.drawable.ic_album_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
                 modifier = Modifier.size(PlaceholderIconSize)

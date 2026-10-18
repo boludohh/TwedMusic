@@ -129,10 +129,10 @@ fun WelcomeScreen(onStart: () -> Unit) {
     // Lista de features con sus iconos y labels localizados
     val features = remember {
         listOf(
-            FeatureSpec(R.drawable.ic_feature_music_local, R.string.welcome_feature_local),
-            FeatureSpec(R.drawable.ic_feature_no_ads, R.string.welcome_feature_no_ads),
-            FeatureSpec(R.drawable.ic_feature_open_source, R.string.welcome_feature_open_source),
-            FeatureSpec(R.drawable.ic_feature_customizable, R.string.welcome_feature_customizable)
+            FeatureSpec(R.drawable.ic_folder_filled, R.string.welcome_feature_local),
+            FeatureSpec(R.drawable.ic_block_outline, R.string.welcome_feature_no_ads),
+            FeatureSpec(R.drawable.ic_code, R.string.welcome_feature_open_source),
+            FeatureSpec(R.drawable.ic_settings_filled, R.string.welcome_feature_customizable)
         )
     }
 

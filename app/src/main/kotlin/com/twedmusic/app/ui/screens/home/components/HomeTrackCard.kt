@@ -70,7 +70,7 @@ fun HomeTrackCard(
         ) {
             // Placeholder icon
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_music_filled),
+                painter = painterResource(id = R.drawable.ic_music_note_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
                 modifier = Modifier.size(26.dp)

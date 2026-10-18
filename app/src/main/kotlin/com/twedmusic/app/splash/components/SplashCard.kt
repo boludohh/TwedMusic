@@ -156,8 +156,8 @@ fun SplashCard(
                     animationSpec = tween(durationMillis = 200)
                 ) { state ->
                     val (iconRes, tint) = when (state) {
-                        PermissionState.GRANTED -> R.drawable.ic_check to MaterialTheme.colorScheme.tertiary
-                        PermissionState.DENIED -> R.drawable.ic_close to MaterialTheme.colorScheme.error
+                        PermissionState.GRANTED -> R.drawable.ic_check_circle_filled to MaterialTheme.colorScheme.tertiary
+                        PermissionState.DENIED -> R.drawable.ic_cancel_filled to MaterialTheme.colorScheme.error
                     }
                     Icon(
                         painter = painterResource(iconRes),

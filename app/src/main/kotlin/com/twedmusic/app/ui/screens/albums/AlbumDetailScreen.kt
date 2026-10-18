@@ -277,7 +277,7 @@ private fun AlbumActionsRow(
             horizontalArrangement = Arrangement.Center
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_play_arrow),
+                painter = painterResource(id = R.drawable.ic_play_arrow_filled),
                 contentDescription = null,
                 tint = inverseColor,
                 modifier = Modifier.size(20.dp)
