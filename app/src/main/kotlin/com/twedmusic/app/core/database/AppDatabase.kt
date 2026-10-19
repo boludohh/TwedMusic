@@ -17,7 +17,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
  *   preservar playlists y estadísticas.
  * - exportSchema = false: no se requiere directorio de exportación
  *   de esquemas para el uso actual del proyecto.
- * - Singleton thread-safe por proceso.
+ * - La instancia única la gestiona Hilt (ver `di/DatabaseModule`).
  * - Room3 requiere un SQLiteDriver: se usa BundledSQLiteDriver.
  */
 @Database(
@@ -44,15 +44,11 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val DATABASE_NAME = "twedmusic.db"
 
-        @Volatile
-        private var instance: AppDatabase? = null
-
-        fun getInstance(context: Context): AppDatabase =
-            instance ?: synchronized(this) {
-                instance ?: buildDatabase(context).also { instance = it }
-            }
-
-        private fun buildDatabase(context: Context): AppDatabase =
+        /**
+         * Construye la base de datos. Hilt la llama una sola vez
+         * (singleton), por lo que ya no hace falta un `getInstance`.
+         */
+        fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
                 .setDriver(BundledSQLiteDriver())
                 .fallbackToDestructiveMigration(dropAllTables = true)

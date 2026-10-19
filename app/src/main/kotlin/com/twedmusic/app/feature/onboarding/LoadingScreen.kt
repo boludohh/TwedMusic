@@ -34,9 +34,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.feature.onboarding.components.FloatingIconsBackground
 import com.twedmusic.app.feature.onboarding.components.TypewriterText
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.viewmodel.compose.viewModel
 /**
  * Pantalla de carga de la Splash (aperturas siguientes).
  *
@@ -67,21 +68,12 @@ import com.twedmusic.app.feature.onboarding.components.TypewriterText
  */
 @Composable
 fun LoadingScreen(
-    audioRepository: AudioRepository,
-    onReady: () -> Unit
+    onReady: () -> Unit,
+    viewModel: LoadingViewModel = viewModel()
 ) {
-    var libraryLoaded by remember { mutableStateOf(false) }
+    // El escaneo de la biblioteca corre en LoadingViewModel.
+    val libraryLoaded by viewModel.libraryLoaded.collectAsState()
     var textFinished by remember { mutableStateOf(false) }
-
-    // Escaneo de la biblioteca musical en segundo plano.
-    // syncIfNeeded() ejecuta el escaneo completo solo si Room está vacío.
-    LaunchedEffect(Unit) {
-        audioRepository.syncIfNeeded().collect {
-            // El flow emite lotes mientras se insertan; al completarse
-            // (sin más emisiones), marcamos libraryLoaded.
-        }
-        libraryLoaded = true
-    }
 
     // Solo transiciona cuando ambas condiciones se cumplen.
     LaunchedEffect(libraryLoaded, textFinished) {

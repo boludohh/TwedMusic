@@ -39,7 +39,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.data.repository.PlaylistRepository
 import com.twedmusic.app.core.model.Playlist
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
@@ -47,6 +46,7 @@ import com.twedmusic.app.core.designsystem.theme.LocalScreenTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
 import com.twedmusic.app.core.designsystem.theme.screenTitle
 import com.twedmusic.app.core.designsystem.components.PlaylistRow
+import androidx.lifecycle.viewmodel.compose.viewModel
 /**
  * Altura del desvanecido superior en dp.
  * El fade ocupa esta distancia desde el tope del LazyColumn hacia abajo,
@@ -91,15 +91,14 @@ private val ScrollFadeThreshold = 48.dp
  * (8dp título/conteo, 24dp conteo/primera fila) coinciden con las
  * otras pestañas, garantizando alineación visual consistente.
  *
- * @param playlistRepository Repositorio de playlists del usuario.
  * @param modifier Modificador de Compose opcional.
  */
 @Composable
 fun PlaylistScreen(
-    playlistRepository: PlaylistRepository,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: PlaylistViewModel = viewModel()
 ) {
-    val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
+    val playlists by viewModel.playlists.collectAsState()
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background

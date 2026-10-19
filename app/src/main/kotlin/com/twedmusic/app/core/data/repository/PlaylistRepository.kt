@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Repositorio de playlists del usuario: orquesta el acceso a datos de
@@ -49,7 +51,8 @@ import kotlinx.coroutines.withContext
  * si la validación falla (nombre duplicado, canción ya presente, etc.);
  * la UI debe capturarlas y mostrar el mensaje correspondiente.
  */
-class PlaylistRepository(
+@Singleton
+class PlaylistRepository @Inject constructor(
     private val appDatabase: AppDatabase
 ) {
     private val playlistDao: PlaylistDao = appDatabase.playlistDao()

@@ -26,18 +26,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.feature.tabs.artists.components.ArtistCircle
 import com.twedmusic.app.core.designsystem.theme.LocalScreenTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
 import com.twedmusic.app.core.designsystem.theme.screenTitle
+import androidx.lifecycle.viewmodel.compose.viewModel
 /**
  * Altura del desvanecido superior en dp.
  * El fade ocupa esta distancia desde el tope del LazyVerticalGrid hacia abajo,
@@ -91,31 +89,21 @@ private val ScrollFadeThreshold = 48.dp
  * en la pantalla de pistas, garantizando alineación visual consistente
  * entre pestañas.
  *
- * @param audioRepository Repositorio de audio para obtener la lista de canciones.
  * @param modifier Modificador de Compose opcional.
  */
 @Composable
 fun ArtistsScreen(
-    audioRepository: AudioRepository,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ArtistsViewModel = viewModel()
 ) {
-    val context = LocalContext.current
-    val songs by audioRepository.songs.collectAsState(initial = emptyList())
+    // Artistas únicos ordenados y mapa de imágenes: vienen del ViewModel
+    val artists by viewModel.artists.collectAsState()
+    val artistImages by viewModel.artistImages.collectAsState()
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val gridState = rememberLazyGridState()
     val density = LocalDensity.current
-
-    // Singleton del repositorio de imágenes de artista desde la
-    // Application: comparte cachés de disco/memoria y la cola de
-    // enriquecido con cualquier otro consumidor futuro.
-    val artistImageRepository = remember {
-        (context.applicationContext as TwedMusicApp).artistImageRepository
-    }
-
-    // Mapa reactivo nombre → File de imagen en disco (solo resueltas).
-    val artistImages by artistImageRepository.artistImages.collectAsState(initial = emptyMap())
 
     // Convertir el umbral de dp a píxeles usando la densidad de la pantalla
     val thresholdPx = with(density) { ScrollFadeThreshold.toPx() }
@@ -142,20 +130,6 @@ fun ArtistsScreen(
                 (scrollDistance / thresholdPx).coerceIn(0f, 1f)
             }
         }
-    }
-
-    // Agrupar canciones por artista y ordenar alfabéticamente
-    val artists = remember(songs) {
-        songs.map { it.artist }
-            .distinct()
-            .sorted()
-    }
-
-    // Enriquecido remoto cache-first al entrar a la pestaña (o al
-    // cambiar la biblioteca). El Mutex interno del repositorio descarta
-    // corridas solapadas; los artistas ya resueltos no generan peticiones.
-    LaunchedEffect(artists) {
-        artistImageRepository.enrichArtists(artists)
     }
 
     Column(

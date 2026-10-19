@@ -32,22 +32,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.core.model.Album
 import com.twedmusic.app.core.model.Song
 import com.twedmusic.app.feature.tabs.albums.components.AlbumCard
 import com.twedmusic.app.core.designsystem.theme.LocalScreenTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
 import com.twedmusic.app.core.designsystem.theme.screenTitle
-import kotlin.time.Duration.Companion.days
-
+import androidx.lifecycle.viewmodel.compose.viewModel
+import java.io.File
 /**
  * Altura del desvanecido superior en dp.
  * El fade ocupa esta distancia desde el tope del LazyVerticalGrid hacia abajo,
@@ -64,13 +61,6 @@ private val TopFadeHeight = 64.dp
  * este umbral, evitando un encendido brusco de un frame a otro.
  */
 private val ScrollFadeThreshold = 48.dp
-
-/**
- * Duración (en días) para considerar un álbum como "Nuevo".
- * Álbumes agregados a la biblioteca dentro de este período muestran
- * el badge "Nuevo" en la esquina superior izquierda de la portada.
- */
-private val NEW_ALBUM_THRESHOLD_DAYS = 30.days
 
 /**
  * Padding inferior del grid de álbumes. Garantiza que al hacer scroll
@@ -101,23 +91,20 @@ private val GridBottomPadding = 8.dp
  * `LazyVerticalGrid` se mantiene vivo en memoria (no se destruye
  * al navegar al detalle, solo se oculta bajo AnimatedContent).
  *
- * @param audioRepository Repositorio de audio para obtener la lista de canciones.
  * @param modifier Modificador de Compose opcional.
+ * @param viewModel ViewModel de la pestaña (lista agrupada y álbum seleccionado).
  */
 @Composable
 fun AlbumsScreen(
-    audioRepository: AudioRepository,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: AlbumsViewModel = viewModel()
 ) {
-    val songs by audioRepository.songs.collectAsState(initial = emptyList())
+    // La lista ya viene agrupada y ordenada por el ViewModel.
+    val albums by viewModel.albums.collectAsState()
 
-    // Estado de navegación interna: null = lista, Album = detalle
-    var selectedAlbum by remember { mutableStateOf<Album?>(null) }
-
-    // Agrupar canciones por álbum y ordenar alfabéticamente
-    val albums = remember(songs) {
-        groupSongsByAlbum(songs)
-    }
+    // Estado de navegación interna: null = lista, Album = detalle.
+    // Vive en el ViewModel, por lo que sobrevive a una rotación.
+    val selectedAlbum by viewModel.selectedAlbum.collectAsState()
 
     AnimatedContent(
         targetState = selectedAlbum,
@@ -131,14 +118,13 @@ fun AlbumsScreen(
         if (album == null) {
             AlbumsListContent(
                 albums = albums,
-                audioRepository = audioRepository,
-                onAlbumClick = { selectedAlbum = it }
+                coverFileOf = viewModel::coverFile,
+                onAlbumClick = viewModel::selectAlbum
             )
         } else {
             AlbumDetailScreen(
                 album = album,
-                audioRepository = audioRepository,
-                onBack = { selectedAlbum = null }
+                onBack = viewModel::clearSelection
             )
         }
     }
@@ -150,19 +136,14 @@ fun AlbumsScreen(
 @Composable
 private fun AlbumsListContent(
     albums: List<Album>,
-    audioRepository: AudioRepository,
+    coverFileOf: (String) -> File?,
     onAlbumClick: (Album) -> Unit
 ) {
-    val context = LocalContext.current
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val gridState = rememberLazyGridState()
     val density = LocalDensity.current
-
-    val coverRepository = remember {
-        (context.applicationContext as TwedMusicApp).coverRepository
-    }
 
     val thresholdPx = with(density) { ScrollFadeThreshold.toPx() }
 
@@ -250,7 +231,7 @@ private fun AlbumsListContent(
                 items = albums,
                 key = { it.key }
             ) { album ->
-                val coverFile = album.coverPath?.let { coverRepository.coverFile(it) }
+                val coverFile = album.coverPath?.let { coverFileOf(it) }
                 AlbumCard(
                     title = album.title,
                     artist = album.artist,
@@ -265,77 +246,3 @@ private fun AlbumsListContent(
     }
 }
 
-/**
- * Agrupa canciones por álbum y devuelve una lista de [Album] ordenada
- * alfabéticamente por título.
- *
- * ## Clave de agrupación
- * La clave es `"${album}|${albumArtist}"` para desambiguar álbumes
- * homónimos de distintos artistas. Para canciones sin campo `album`,
- * se usa el `artist` como fallback (canciones sueltas aparecen
- * agrupadas por artista).
- *
- * ## Carátula del álbum
- * Para cada grupo, se busca la primera canción que tenga carátula en
- * disco (verificando que el campo `path` no esté vacío). Si ninguna
- * canción del grupo tiene carátula, [Album.coverPath] es `null`.
- *
- * ## Badge "Nuevo"
- * [Album.isNew] es `true` si la canción más reciente del grupo fue
- * agregada en los últimos 30 días (basado en `Song.dateAdded`).
- */
-private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
-    if (songs.isEmpty()) return emptyList()
-
-    val newThresholdMs = System.currentTimeMillis() - NEW_ALBUM_THRESHOLD_DAYS.inWholeMilliseconds
-
-    // Agrupar por clave (album, albumArtist)
-    val grouped = songs.groupBy { song ->
-        val albumName = song.album?.takeIf { it.isNotBlank() }
-        val artistName = song.albumArtist?.takeIf { it.isNotBlank() }
-            ?: song.artist.takeIf { it.isNotBlank() }
-            ?: "Unknown Artist"
-
-        if (albumName != null) {
-            "$albumName|$artistName"
-        } else {
-            // Canciones sin álbum: agrupar por artista
-            "|$artistName"
-        }
-    }
-
-    // Convertir cada grupo a Album
-    return grouped.map { (key, groupSongs) ->
-        val firstSong = groupSongs.first()
-
-        // Título del álbum (o nombre del artista si no hay álbum)
-        val title = firstSong.album?.takeIf { it.isNotBlank() }
-            ?: firstSong.artist
-
-        // Artista del álbum (albumArtist preferido, fallback a artist)
-        val artist = firstSong.albumArtist?.takeIf { it.isNotBlank() }
-            ?: firstSong.artist
-
-        // Año (primer valor no-null encontrado en el grupo)
-        val year = groupSongs.firstNotNullOfOrNull { it.year }
-
-        // Carátula del álbum (path de la primera canción con carátula)
-        val coverPath = groupSongs
-            .filter { it.path.isNotBlank() }
-            .firstOrNull()?.path
-
-        // Badge "Nuevo": maxDateAdded del grupo > threshold de 30 días
-        val maxDateAdded = groupSongs.maxOfOrNull { it.dateAdded } ?: 0L
-        val isNew = maxDateAdded > newThresholdMs
-
-        Album(
-            key = key,
-            title = title,
-            artist = artist,
-            year = year,
-            trackCount = groupSongs.size,
-            coverPath = coverPath,
-            isNew = isNew
-        )
-    }.sortedBy { it.title.lowercase() }
-}

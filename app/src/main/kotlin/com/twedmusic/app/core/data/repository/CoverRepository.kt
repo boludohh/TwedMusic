@@ -14,6 +14,9 @@ import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import com.twedmusic.app.core.util.FileDescriptorHelper
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Repositorio de portadas de álbumes con caché de dos niveles:
@@ -58,7 +61,10 @@ import com.twedmusic.app.core.util.FileDescriptorHelper
  * el resultado en memoria (thread-safe con [ConcurrentHashMap]) y
  * se invalida junto con los otros niveles en [deleteCover]/[clearCache].
  */
-class CoverRepository(private val context: Context) {
+@Singleton
+class CoverRepository @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     /** Formatos de imagen reconocidos por sus magic bytes. */
     private enum class CoverFormat(val extension: String) {

@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 import com.twedmusic.app.core.util.FileDescriptorHelper
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Orquesta el escaneo y sincronización de la biblioteca musical.
@@ -94,10 +97,13 @@ import com.twedmusic.app.core.util.FileDescriptorHelper
  * Todo el trabajo corre con prioridad BACKGROUND y en
  * `Dispatchers.IO`.
  */
-class AudioRepository(
-    private val context: Context,
+@Singleton
+class AudioRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val database: AppDatabase,
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    /** Repositorio de portadas (singleton compartido): extracción inline y limpieza. */
+    private val coverRepository: CoverRepository
 ) {
 
     /** Lista reactiva de canciones ordenadas por título (dominio). */
@@ -134,9 +140,6 @@ class AudioRepository(
 
     /** Timestamp (ms del reloj del sistema) del último incrementalScan ejecutado. */
     private var lastIncrementalScanTimeMs: Long = 0L
-
-    /** Repositorio de portadas: extracción inline y limpieza. */
-    private val coverRepository = CoverRepository(context)
 
     /** Instancia de KTagLib para extracción de metadatos. */
     private val kTagLib = KTagLib()

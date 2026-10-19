@@ -28,19 +28,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.core.model.Album
 import com.twedmusic.app.core.model.Song
-import com.twedmusic.app.feature.playback.PlaybackController
-import com.twedmusic.app.feature.playback.engine.BassPlayerAdapter
 import com.twedmusic.app.feature.tabs.albums.components.AlbumDetailTopBar
 import com.twedmusic.app.feature.tabs.albums.components.AlbumDetailTrackRow
 import com.twedmusic.app.feature.tabs.albums.components.AlbumHeroCard
@@ -49,13 +44,7 @@ import com.twedmusic.app.core.designsystem.theme.LocalFloatingIconColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTopBarIconColor
-/**
- * Queue ID usado por el detalle de álbum para identificar su cola
- * en el reproductor. Permite al adapter distinguir entre la cola
- * global de biblioteca y la cola específica de un álbum.
- */
-private const val QUEUE_ALBUM = "album"
-
+import androidx.lifecycle.viewmodel.compose.viewModel
 /**
  * Pantalla de detalle de un álbum específico.
  *
@@ -88,59 +77,29 @@ private const val QUEUE_ALBUM = "album"
  * su song.id.
  *
  * @param album Álbum a mostrar (modelo de dominio).
- * @param audioRepository Repositorio para obtener todas las canciones
- *        del álbum (filtrando por `album + albumArtist`).
  * @param onBack Callback para volver a la lista de álbumes.
  * @param modifier Modificador externo.
+ * @param viewModel ViewModel compartido con [AlbumsScreen] (misma
+ *        instancia): provee las canciones del álbum y la reproducción.
  */
 @Composable
 fun AlbumDetailScreen(
     album: Album,
-    audioRepository: AudioRepository,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: AlbumsViewModel = viewModel()
 ) {
-    val context = LocalContext.current
-    val allSongs by audioRepository.songs.collectAsState(initial = emptyList())
-    val playbackController = remember {
-        (context.applicationContext as TwedMusicApp).playbackController
-    }
-    val coverRepository = remember {
-        (context.applicationContext as TwedMusicApp).coverRepository
-    }
-    val currentMediaId by playbackController.currentMediaId.collectAsState()
+    // Canciones del álbum (ordenadas), duración total y pista actual
+    // vienen del ViewModel.
+    val detail by viewModel.albumDetail.collectAsState()
+    val albumSongs = detail.songs
+    val totalDurationMs = detail.totalDurationMs
+    val currentMediaId by viewModel.currentMediaId.collectAsState()
 
     val titleColor = LocalListItemTitleColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    // Filtrar canciones del álbum: mismas reglas que groupSongsByAlbum
-    val albumSongs = remember(allSongs, album.key) {
-        allSongs
-            .filter { song ->
-                val albumName = song.album?.takeIf { it.isNotBlank() }
-                val artistName = song.albumArtist?.takeIf { it.isNotBlank() }
-                    ?: song.artist.takeIf { it.isNotBlank() }
-                    ?: "Unknown Artist"
-                val songKey = if (albumName != null) {
-                    "$albumName|$artistName"
-                } else {
-                    "|$artistName"
-                }
-                songKey == album.key
-            }
-            .sortedWith(
-                compareBy<Song> { it.discNumber ?: 0 }
-                    .thenBy { it.trackNumber ?: Int.MAX_VALUE }
-                    .thenBy { it.title.lowercase() }
-            )
-    }
-
-    // Duración total del álbum
-    val totalDurationMs = remember(albumSongs) {
-        albumSongs.sumOf { it.duration }
-    }
-
-    val coverFile = album.coverPath?.let { coverRepository.coverFile(it) }
+    val coverFile = album.coverPath?.let { viewModel.coverFile(it) }
 
     Column(
         modifier = modifier
@@ -179,16 +138,7 @@ fun AlbumDetailScreen(
             // Action row (Reproducir + Shuffle)
             item(key = "actions") {
                 AlbumActionsRow(
-                    onPlayClick = {
-                        val firstSong = albumSongs.firstOrNull()
-                        if (firstSong != null) {
-                            playbackController.playSong(
-                                song = firstSong,
-                                queueId = QUEUE_ALBUM,
-                                queueSongs = albumSongs
-                            )
-                        }
-                    },
+                    onPlayClick = viewModel::playAlbum,
                     onShuffleClick = { /* TODO: implementar shuffle */ }
                 )
                 Spacer(modifier = Modifier.height(28.dp))
@@ -213,18 +163,11 @@ fun AlbumDetailScreen(
                 items = albumSongs,
                 key = { _, song -> song.id }
             ) { index, song ->
-                val songCoverFile = coverRepository.coverFile(song.path)
                 AlbumDetailTrackRow(
                     song = song,
                     trackIndex = index + 1,
                     isCurrentTrack = currentMediaId == song.id.toString(),
-                    onClick = {
-                        playbackController.playSong(
-                            song = song,
-                            queueId = QUEUE_ALBUM,
-                            queueSongs = albumSongs
-                        )
-                    },
+                    onClick = { viewModel.playSong(song) },
                     onMoreClick = { /* TODO: menú de opciones */ }
                 )
             }

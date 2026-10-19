@@ -47,7 +47,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.datastore.AppPreferences
 import com.twedmusic.app.core.locale.LocaleManager
 import com.twedmusic.app.core.permissions.PermissionHandler
 import com.twedmusic.app.feature.onboarding.components.CapsuleButton
@@ -55,6 +54,7 @@ import com.twedmusic.app.feature.onboarding.components.PermissionState
 import com.twedmusic.app.feature.onboarding.components.SetupCard
 import com.twedmusic.app.core.designsystem.theme.ThemeToggleButton
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 /** Idiomas disponibles con su recurso de nombre localizado. */
 private val languageEntries: List<Pair<String, Int>> = listOf(
@@ -139,10 +139,10 @@ private const val finishButtonAnimDuration = 300
 fun SetupScreen(
     resumeTick: Int,
     onBack: () -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    viewModel: SetupViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val preferences = remember { AppPreferences(context.applicationContext) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
@@ -166,7 +166,7 @@ fun SetupScreen(
     }
     val requiredGranted = audioGranted && notificationGranted
 
-    val currentLanguage = remember { preferences.getLanguageBlocking() }
+    val currentLanguage = remember { viewModel.currentLanguage() }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -347,7 +347,7 @@ fun SetupScreen(
                     onClick = {
                         if (code != currentLanguage) {
                             scope.launch {
-                                preferences.setLanguage(code)
+                                viewModel.setLanguage(code)
                                 (context as? ComponentActivity)?.recreate()
                             }
                         }

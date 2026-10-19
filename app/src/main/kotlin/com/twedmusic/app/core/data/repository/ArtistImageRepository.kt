@@ -22,6 +22,9 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Repositorio de imágenes de artista: orquesta el pipeline completo
@@ -53,8 +56,9 @@ import java.util.concurrent.ConcurrentHashMap
  * criterio que [CoverRepository]. Un [ConcurrentHashMap] evita stats
  * de disco repetidos entre recomposiciones.
  */
-class ArtistImageRepository(
-    context: Context,
+@Singleton
+class ArtistImageRepository @Inject constructor(
+    @ApplicationContext context: Context,
     appDatabase: AppDatabase
 ) {
 

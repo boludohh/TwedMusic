@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import java.util.Locale
 import com.twedmusic.app.core.datastore.AppPreferences
+import dagger.hilt.android.EntryPointAccessors
 
 /**
  * Gestiona el idioma de la aplicación sin depender de AppCompat.
@@ -61,6 +62,19 @@ object LocaleManager {
         Locale.Builder().setLanguage(code).build()
 
     /**
+     * Atajo para `attachBaseContext` de las Activities: obtiene el
+     * [AppPreferences] singleton de Hilt mediante [LocaleEntryPoint]
+     * (la inyección por campo todavía no está disponible en ese
+     * momento) y aplica el idioma guardado.
+     */
+    fun wrapContext(newBase: Context): Context {
+        val preferences = EntryPointAccessors
+            .fromApplication(newBase.applicationContext, LocaleEntryPoint::class.java)
+            .appPreferences()
+        return applyLocale(newBase, preferences)
+    }
+
+    /**
      * Devuelve un contexto con el idioma guardado aplicado.
      * Usa una lectura bloqueante de DataStore: se invoca una única vez
      * por creación de Activity en attachBaseContext.
@@ -71,8 +85,8 @@ object LocaleManager {
      * La inversión visual real del layout se hace a nivel de Compose
      * en ThemeSwitcherHost mediante LocalLayoutDirection.
      */
-    fun applyLocale(context: Context): Context {
-        val code = AppPreferences(context).getLanguageBlocking()
+    fun applyLocale(context: Context, preferences: AppPreferences): Context {
+        val code = preferences.getLanguageBlocking()
         val locale = localeFor(code)
         Locale.setDefault(locale)
 

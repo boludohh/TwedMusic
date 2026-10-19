@@ -21,19 +21,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.data.repository.AudioRepository
-import com.twedmusic.app.feature.playback.engine.BassPlayerAdapter
 import com.twedmusic.app.core.designsystem.components.TrackRow
 import com.twedmusic.app.core.designsystem.theme.LocalScreenTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
 import com.twedmusic.app.core.designsystem.theme.screenTitle
+import androidx.lifecycle.viewmodel.compose.viewModel
 /**
  * Altura del desvanecido superior en dp.
  * El fade ocupa esta distancia desde el tope del LazyColumn hacia abajo,
@@ -92,29 +89,20 @@ private val ScrollFadeThreshold = 48.dp
  * entre canciones gracias al key estable del LazyColumn y al cacheo de
  * Coil por ruta de archivo.
  *
- * **Optimización: CoverRepository singleton**. Usa el singleton de
- * [TwedMusicApp] en lugar de crear una instancia propia,
- * compartiendo el caché de memoria con el servicio y evitando duplicados.
+ * **Estado en el ViewModel**. La lista ordenada, la pista actual y la
+ * reproducción vienen de [TracksViewModel]. El CoverRepository es el
+ * singleton de Hilt, compartido con el servicio de reproducción.
  *
  * **Esta pantalla no realiza extracción de portadas.**
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
  */
 @Composable
 fun TracksScreen(
-    audioRepository: AudioRepository,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: TracksViewModel = viewModel()
 ) {
-    val context = LocalContext.current
-    val songs by audioRepository.songs.collectAsState(initial = emptyList())
-    // Singleton de CoverRepository desde la Application: comparte caché
-    // de memoria con PlaybackService y evita duplicados.
-    val coverRepository = remember {
-        (context.applicationContext as TwedMusicApp).coverRepository
-    }
-    // Singleton de PlaybackController desde la Application
-    val playbackController = remember {
-        (context.applicationContext as TwedMusicApp).playbackController
-    }
+    // Canciones ya ordenadas por fecha de agregada (más recientes primero)
+    val sortedSongs by viewModel.songs.collectAsState()
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -148,13 +136,8 @@ fun TracksScreen(
         }
     }
 
-    // Ordenar por fecha de agregada descendente (más recientes primero)
-    val sortedSongs = remember(songs) {
-        songs.sortedByDescending { it.dateAdded }
-    }
-
     // Flow reactivo del controller: mediaId de la pista actualmente en reproducción
-    val currentPlayingMediaId by playbackController.currentMediaId.collectAsState()
+    val currentPlayingMediaId by viewModel.currentMediaId.collectAsState()
 
     Column(
         modifier = modifier
@@ -238,7 +221,7 @@ fun TracksScreen(
                 // Ahora usa el caché de coverFile() de CoverRepository para evitar
                 // stats de disco repetidos al recomponer filas visibles.
                 val coverFile = remember(song.path) {
-                    coverRepository.coverFile(song.path)
+                    viewModel.coverFile(song.path)
                 }
 
                 // ¿Esta canción es la que está sonando ahora?
@@ -249,13 +232,7 @@ fun TracksScreen(
                     song = song,
                     coverFile = coverFile,
                     isCurrentTrack = isCurrentTrack,
-                    onClick = {
-                        playbackController.playSong(
-                            song = song,
-                            queueId = BassPlayerAdapter.QUEUE_TRACKS_BY_DATE,
-                            queueSongs = sortedSongs
-                        )
-                    },
+                    onClick = { viewModel.onSongClick(song) },
                     onMoreClick = {
                         // TODO: futuro menú de opciones de la pista
                         // (añadir a playlist, compartir, detalles, etc.).

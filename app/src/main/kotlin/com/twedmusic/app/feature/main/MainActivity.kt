@@ -13,13 +13,14 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.twedmusic.app.core.datastore.AppPreferences
 import com.twedmusic.app.core.locale.LocaleManager
-import com.twedmusic.app.core.database.AppDatabase
 import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.core.designsystem.configureEdgeToEdge
 import com.twedmusic.app.feature.main.MainScreen
 import com.twedmusic.app.core.designsystem.theme.ThemeMode
 import com.twedmusic.app.core.designsystem.theme.ThemeSwitcherHost
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Activity principal de TwedMusic.
@@ -37,21 +38,23 @@ import kotlinx.coroutines.launch
  * layout direction de Compose mediante LocalLayoutDirection cuando
  * corresponde (ej. árabe). Compatible con API 27–37 sin crashes.
  */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private lateinit var audioRepository: AudioRepository
+    // Inyectados por Hilt durante super.onCreate(): no usarlos antes.
+    @Inject
+    lateinit var audioRepository: AudioRepository
+
+    @Inject
+    lateinit var preferences: AppPreferences
 
     override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(LocaleManager.applyLocale(newBase))
+        super.attachBaseContext(LocaleManager.wrapContext(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureEdgeToEdge()
-
-        val preferences = AppPreferences(applicationContext)
-        val database = AppDatabase.getInstance(applicationContext)
-        audioRepository = AudioRepository(applicationContext, database, preferences)
 
         val systemIsDark = isSystemDark()
         val initialTheme = preferences.getThemeModeBlocking()
@@ -71,7 +74,7 @@ class MainActivity : ComponentActivity() {
                     scope.launch { preferences.setThemeMode(newTheme) }
                 }
             ) {
-                MainScreen(audioRepository = audioRepository)
+                MainScreen()
             }
         }
     }

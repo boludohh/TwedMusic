@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import com.twedmusic.app.core.locale.LocaleManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * DataStore de preferencias de TwedMusic (singleton por proceso).
@@ -33,7 +36,10 @@ private val Context.twedMusicDataStore by preferencesDataStore(name = "twedmusic
  * Activities (attachBaseContext / onCreate), donde se necesita el
  * valor antes de dibujar el primer frame.
  */
-class AppPreferences(private val context: Context) {
+@Singleton
+class AppPreferences @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     /** true si el usuario completó la configuración inicial de la Splash. */
     val setupCompleted: Flow<Boolean> =

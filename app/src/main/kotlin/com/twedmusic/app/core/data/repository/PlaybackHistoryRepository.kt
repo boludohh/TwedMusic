@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Repositorio de historial de reproducción: orquesta el registro de
@@ -42,7 +44,8 @@ import kotlinx.coroutines.withContext
  * Todos los Flows se re-emiten automáticamente cuando play_stats
  * cambia, por lo que la UI no necesita refrescar manualmente.
  */
-class PlaybackHistoryRepository(
+@Singleton
+class PlaybackHistoryRepository @Inject constructor(
     private val appDatabase: AppDatabase
 ) {
     private val playStatsDao: PlayStatsDao = appDatabase.playStatsDao()

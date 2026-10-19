@@ -16,7 +16,6 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.twedmusic.app.feature.main.MainActivity
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.core.data.repository.CoverRepository
 import com.twedmusic.app.core.data.repository.PlaybackHistoryRepository
 import com.twedmusic.app.feature.playback.engine.BassPlayerAdapter
@@ -31,6 +30,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.twedmusic.app.core.data.repository.AudioRepository
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Servicio de reproducción en segundo plano de TwedMusic.
@@ -76,13 +78,14 @@ import kotlinx.coroutines.withContext
  * ## Optimizaciones de rendimiento
  * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
  *   para no bloquear el hilo principal durante syncs de biblioteca.
- * - Usa el `CoverRepository` singleton de la Application, compartiendo
+ * - Usa el `CoverRepository` singleton de Hilt, compartiendo
  *   el caché de memoria con el resto de la app (evita duplicados).
  *
  * Nota de API (Media3 1.11.0): [MediaLibrarySession] es una clase
  * anidada dentro de [MediaLibraryService], por eso se importa como
  * `MediaLibraryService.MediaLibrarySession`.
  */
+@AndroidEntryPoint
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
 
@@ -140,19 +143,22 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Repositorio de portadas para construir MediaItems.
-     * Reutiliza el singleton de la Application para compartir el caché
+     * Singleton de Hilt (inyectado): comparte el caché
      * de memoria con la UI y evitar duplicados.
      */
-    private val coverRepository: CoverRepository
-        get() = (application as TwedMusicApp).coverRepository
+    @Inject
+    lateinit var coverRepository: CoverRepository
 
     /**
      * Repositorio de historial de reproducción.
-     * Reutiliza el singleton de la Application para compartir el acceso
+     * Singleton de Hilt (inyectado): comparte el acceso
      * a play_stats con HomeScreen y otros consumidores.
      */
-    private val playbackHistoryRepository: PlaybackHistoryRepository
-        get() = (application as TwedMusicApp).playbackHistoryRepository
+    @Inject
+    lateinit var playbackHistoryRepository: PlaybackHistoryRepository
+
+    @Inject
+    lateinit var audioRepository: AudioRepository
 
     // =========================================================================
     // Audio focus para BASS
@@ -475,7 +481,6 @@ class PlaybackService : MediaLibraryService() {
      * trabajo redundante.
      */
     private fun subscribeToLibraryChanges() {
-        val audioRepository = (application as TwedMusicApp).audioRepository
         val bassPlayer = player ?: return
 
         librarySubscriptionJob = serviceScope.launch {

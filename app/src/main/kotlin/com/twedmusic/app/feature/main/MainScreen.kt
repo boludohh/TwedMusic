@@ -18,10 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.twedmusic.app.TwedMusicApp
-import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.feature.main.components.BottomNavigationPanel
 import com.twedmusic.app.feature.main.components.TopActionBar
 import com.twedmusic.app.feature.tabs.albums.AlbumsScreen
@@ -30,6 +27,7 @@ import com.twedmusic.app.feature.tabs.home.HomeScreen
 import com.twedmusic.app.feature.tabs.playlist.PlaylistScreen
 import com.twedmusic.app.feature.search.SearchScreen
 import com.twedmusic.app.feature.tabs.tracks.TracksScreen
+import androidx.compose.runtime.saveable.rememberSaveable
 /**
  * Pantalla principal de TwedMusic.
  *
@@ -64,25 +62,12 @@ import com.twedmusic.app.feature.tabs.tracks.TracksScreen
  * estaba, preservando el estado de scroll y selección.
  */
 @Composable
-fun MainScreen(audioRepository: AudioRepository) {
-    val context = LocalContext.current
+fun MainScreen() {
     // Estado de navegación compartido con el panel inferior
-    var selectedTab by remember { mutableStateOf(NavTab.HOME) }
+    var selectedTab by rememberSaveable { mutableStateOf(NavTab.HOME) }
     
     // Estado del overlay de búsqueda
-    var isSearchOpen by remember { mutableStateOf(false) }
-
-    // Singleton de PlaylistRepository desde la Application: compartido
-    // por toda la app y pasado como parámetro a la pantalla de listas.
-    val playlistRepository = remember {
-        (context.applicationContext as TwedMusicApp).playlistRepository
-    }
-
-    // Singleton de PlaybackHistoryRepository desde la Application: compartido
-    // por toda la app y pasado como parámetro a la pantalla de inicio.
-    val playbackHistoryRepository = remember {
-        (context.applicationContext as TwedMusicApp).playbackHistoryRepository
-    }
+    var isSearchOpen by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -107,14 +92,11 @@ fun MainScreen(audioRepository: AudioRepository) {
                 .padding(top = 43.dp, bottom = 130.dp)
         ) { tab ->
             when (tab) {
-                NavTab.HOME -> HomeScreen(
-                    audioRepository = audioRepository,
-                    playbackHistoryRepository = playbackHistoryRepository
-                )
-                NavTab.TRACKS -> TracksScreen(audioRepository = audioRepository)
-                NavTab.ALBUMS -> AlbumsScreen(audioRepository = audioRepository)
-                NavTab.ARTISTS -> ArtistsScreen(audioRepository = audioRepository)
-                NavTab.PLAYLISTS -> PlaylistScreen(playlistRepository = playlistRepository)
+                NavTab.HOME -> HomeScreen()
+                NavTab.TRACKS -> TracksScreen()
+                NavTab.ALBUMS -> AlbumsScreen()
+                NavTab.ARTISTS -> ArtistsScreen()
+                NavTab.PLAYLISTS -> PlaylistScreen()
             }
         }
 

@@ -23,13 +23,13 @@ import androidx.compose.runtime.setValue
 import com.twedmusic.app.feature.main.MainActivity
 import com.twedmusic.app.core.datastore.AppPreferences
 import com.twedmusic.app.core.locale.LocaleManager
-import com.twedmusic.app.core.database.AppDatabase
-import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.core.permissions.PermissionHandler
 import com.twedmusic.app.core.designsystem.configureEdgeToEdge
 import com.twedmusic.app.core.designsystem.theme.ThemeMode
 import com.twedmusic.app.core.designsystem.theme.ThemeSwitcherHost
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Activity launcher de TwedMusic.
@@ -56,22 +56,21 @@ import kotlinx.coroutines.launch
  * layout direction de Compose mediante LocalLayoutDirection cuando
  * corresponde (ej. árabe). Compatible con API 27–37 sin crashes.
  */
+@AndroidEntryPoint
 class OnboardingActivity : ComponentActivity() {
 
     private enum class Phase { WELCOME, SETUP, LOADING }
 
-    private val preferences by lazy { AppPreferences(applicationContext) }
-    private val database by lazy { AppDatabase.getInstance(applicationContext) }
-    private val audioRepository by lazy { 
-        AudioRepository(applicationContext, database, preferences) 
-    }
-    
+    // Inyectado por Hilt durante super.onCreate(): no usarlo antes.
+    @Inject
+    lateinit var preferences: AppPreferences
+
     private var phase by mutableStateOf(Phase.WELCOME)
     private var resumeTick by mutableIntStateOf(0)
     private var systemIsDark = false
 
     override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(LocaleManager.applyLocale(newBase))
+        super.attachBaseContext(LocaleManager.wrapContext(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -194,7 +193,6 @@ class OnboardingActivity : ComponentActivity() {
                 )
 
                 Phase.LOADING -> LoadingScreen(
-                    audioRepository = audioRepository,
                     onReady = {
                         // Transición activa: cuando la librería termina de
                         // cargarse y el texto termina de escribirse, se lanza

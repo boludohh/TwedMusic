@@ -19,15 +19,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.R
 import com.twedmusic.app.core.database.TotalStats
-import com.twedmusic.app.core.data.repository.AudioRepository
-import com.twedmusic.app.core.data.repository.PlaybackHistoryRepository
 import com.twedmusic.app.core.model.Song
 import com.twedmusic.app.feature.tabs.home.components.HomeAlbumCard
 import com.twedmusic.app.feature.tabs.home.components.HomeArtistCard
@@ -41,6 +37,8 @@ import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
 import java.util.Calendar
+import androidx.lifecycle.viewmodel.compose.viewModel
+import java.io.File
 
 /**
  * Pantalla de inicio de TwedMusic (rediseño basado en mockup HTML).
@@ -58,79 +56,32 @@ import java.util.Calendar
  * 8. **Playlists**: grid 2 columnas de playlists con mosaicos
  * 9. **Álbumes**: fila horizontal de álbumes recientes
  *
- * @param audioRepository Repositorio de audio para obtener canciones y álbumes.
- * @param playbackHistoryRepository Repositorio de historial de reproducción.
  * @param modifier Modificador de Compose opcional.
  */
 @Composable
 fun HomeScreen(
-    audioRepository: AudioRepository,
-    playbackHistoryRepository: PlaybackHistoryRepository,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: HomeViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val attributionColor = LocalTracksCountTextColor.current
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    val coverRepository = remember {
-        (context.applicationContext as TwedMusicApp).coverRepository
-    }
-    val artistImageRepository = remember {
-        (context.applicationContext as TwedMusicApp).artistImageRepository
-    }
-
-    // Flows reactivos del repositorio de historial
-    val totalStats by playbackHistoryRepository.totalStats.collectAsState(
-        initial = TotalStats(0, 0, 0L)
-    )
-    val recentlyPlayed by playbackHistoryRepository.getRecentlyPlayed(5)
-        .collectAsState(initial = emptyList())
-
-    // Flow de canciones
-    val songs by audioRepository.songs.collectAsState(initial = emptyList())
+    // Todo el estado de la pantalla viene del ViewModel
+    val state by viewModel.uiState.collectAsState()
+    val totalStats = state.totalStats
+    val recentlyPlayed = state.recentlyPlayed
+    val recentlyAdded = state.recentlyAdded
+    val uniqueArtists = state.uniqueArtists
+    val recentAlbums = state.recentAlbums
+    val songCount = state.songCount
 
     // Saludo según hora del día
     val greeting = rememberGreeting()
 
     // Canción para "Seguir escuchando": la más reciente reproducida
     val resumeSong = recentlyPlayed.firstOrNull()
-
-    // Álbumes recientes: agrupar por álbum y ordenar por dateAdded descendente
-    val recentAlbums = remember(songs) {
-        songs
-            .groupBy { song ->
-                val albumName = song.album?.takeIf { it.isNotBlank() }
-                val artistName = song.albumArtist?.takeIf { it.isNotBlank() }
-                    ?: song.artist.takeIf { it.isNotBlank() }
-                    ?: "Unknown Artist"
-                if (albumName != null) "$albumName|$artistName" else "|$artistName"
-            }
-            .map { (key, groupSongs) ->
-                val firstSong = groupSongs.first()
-                val title = firstSong.album?.takeIf { it.isNotBlank() } ?: firstSong.artist
-                val artist = firstSong.albumArtist?.takeIf { it.isNotBlank() } ?: firstSong.artist
-                val coverPath = groupSongs.firstOrNull { it.path.isNotBlank() }?.path
-                val dateAdded = groupSongs.maxOf { it.dateAdded }
-                HomeAlbumData(title, artist, coverPath, dateAdded)
-            }
-            .sortedByDescending { it.dateAdded }
-            .take(10)
-    }
-
-    // Canciones agregadas recientemente
-    val recentlyAdded = remember(songs) {
-        songs.sortedByDescending { it.dateAdded }.take(10)
-    }
-
-    // Artistas únicos (para la sección "Tus artistas")
-    val uniqueArtists = remember(songs) {
-        songs
-            .mapNotNull { it.artist.takeIf { name -> name.isNotBlank() } }
-            .distinct()
-            .take(10)
-    }
 
     // Tiempo formateado para el panel de estadísticas
     val formattedTime = formatPlayedTime(totalStats.totalPlayedMs)
@@ -140,7 +91,7 @@ fun HomeScreen(
     val completedLabel = stringResource(R.string.home_completed_plays)
     val timeLabel = stringResource(R.string.home_hours_listened)
     val shuffleTitle = stringResource(R.string.home_shuffle_all)
-    val shuffleCount = stringResource(R.string.home_shuffle_count, songs.size)
+    val shuffleCount = stringResource(R.string.home_shuffle_count, songCount)
 
     Box(
         modifier = modifier
@@ -173,7 +124,7 @@ fun HomeScreen(
                 item(key = "resume_section") {
                     ResumeSection(
                         song = resumeSong,
-                        coverRepository = coverRepository
+                        coverFileOf = viewModel::coverFile
                     )
                 }
             }
@@ -192,7 +143,7 @@ fun HomeScreen(
             }
 
             // ── Shuffle all ──
-            if (songs.isNotEmpty()) {
+            if (songCount > 0) {
                 item(key = "shuffle") {
                     ShuffleAllButton(
                         titleText = shuffleTitle,
@@ -207,7 +158,7 @@ fun HomeScreen(
                 item(key = "recent_section") {
                     RecentlyPlayedSection(
                         songs = recentlyPlayed,
-                        coverRepository = coverRepository
+                        coverFileOf = viewModel::coverFile
                     )
                 }
             }
@@ -217,7 +168,7 @@ fun HomeScreen(
                 item(key = "artists_section") {
                     ArtistsSection(
                         artists = uniqueArtists,
-                        artistImageRepository = artistImageRepository
+                        artistImageFileOf = viewModel::artistImageFile
                     )
                 }
             }
@@ -227,7 +178,7 @@ fun HomeScreen(
                 item(key = "added_section") {
                     RecentlyAddedSection(
                         songs = recentlyAdded,
-                        coverRepository = coverRepository
+                        coverFileOf = viewModel::coverFile
                     )
                 }
             }
@@ -242,13 +193,13 @@ fun HomeScreen(
                 item(key = "albums_section") {
                     AlbumsSection(
                         albums = recentAlbums,
-                        coverRepository = coverRepository
+                        coverFileOf = viewModel::coverFile
                     )
                 }
             }
 
             // ── Estado vacío ──
-            if (songs.isEmpty() && totalStats.totalPlays == 0) {
+            if (songCount == 0 && totalStats.totalPlays == 0) {
                 item(key = "empty_state") {
                     Box(
                         modifier = Modifier
@@ -285,7 +236,7 @@ fun HomeScreen(
 @Composable
 private fun ResumeSection(
     song: Song,
-    coverRepository: com.twedmusic.app.core.data.repository.CoverRepository
+    coverFileOf: (String) -> File?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         HomeSectionHeader(
@@ -296,7 +247,7 @@ private fun ResumeSection(
             title = song.title,
             artist = song.artist,
             context = stringResource(R.string.home_resume_playing_from),
-            coverFile = coverRepository.coverFile(song.path),
+            coverFile = coverFileOf(song.path),
             onCardClick = { /* TODO: navegar */ }
         )
     }
@@ -329,7 +280,7 @@ private fun StatsSection(
 @Composable
 private fun RecentlyPlayedSection(
     songs: List<Song>,
-    coverRepository: com.twedmusic.app.core.data.repository.CoverRepository
+    coverFileOf: (String) -> File?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         HomeSectionHeader(
@@ -348,7 +299,7 @@ private fun RecentlyPlayedSection(
                 HomeTrackCard(
                     title = song.title,
                     subtitle = song.artist,
-                    coverFile = coverRepository.coverFile(song.path),
+                    coverFile = coverFileOf(song.path),
                     onClick = { /* TODO: reproducir */ }
                 )
             }
@@ -359,7 +310,7 @@ private fun RecentlyPlayedSection(
 @Composable
 private fun ArtistsSection(
     artists: List<String>,
-    artistImageRepository: com.twedmusic.app.core.data.repository.ArtistImageRepository
+    artistImageFileOf: (String) -> File?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         HomeSectionHeader(
@@ -375,7 +326,7 @@ private fun ArtistsSection(
                 items = artists,
                 key = { "artist-$it" }
             ) { artistName ->
-                val imageFile = artistImageRepository.artistImageFile(artistName)
+                val imageFile = artistImageFileOf(artistName)
                 HomeArtistCard(
                     artistName = artistName,
                     imageFile = imageFile,
@@ -389,7 +340,7 @@ private fun ArtistsSection(
 @Composable
 private fun RecentlyAddedSection(
     songs: List<Song>,
-    coverRepository: com.twedmusic.app.core.data.repository.CoverRepository
+    coverFileOf: (String) -> File?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         HomeSectionHeader(
@@ -408,7 +359,7 @@ private fun RecentlyAddedSection(
                 HomeTrackCard(
                     title = song.title,
                     subtitle = song.artist,
-                    coverFile = coverRepository.coverFile(song.path),
+                    coverFile = coverFileOf(song.path),
                     onClick = { /* TODO: reproducir */ }
                 )
             }
@@ -473,7 +424,7 @@ private fun PlaylistsSection() {
 @Composable
 private fun AlbumsSection(
     albums: List<HomeAlbumData>,
-    coverRepository: com.twedmusic.app.core.data.repository.CoverRepository
+    coverFileOf: (String) -> File?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         HomeSectionHeader(
@@ -492,7 +443,7 @@ private fun AlbumsSection(
                 HomeAlbumCard(
                     title = album.title,
                     artist = album.artist,
-                    coverFile = album.coverPath?.let { coverRepository.coverFile(it) },
+                    coverFile = album.coverPath?.let { coverFileOf(it) },
                     onClick = { /* TODO: navegar a detalle álbum */ }
                 )
             }
@@ -537,12 +488,3 @@ private fun formatPlayedTime(playedMs: Long): String {
     }
 }
 
-/**
- * DTO para álbum reciente en la sección de álbumes de Home.
- */
-private data class HomeAlbumData(
-    val title: String,
-    val artist: String,
-    val coverPath: String?,
-    val dateAdded: Long
-)

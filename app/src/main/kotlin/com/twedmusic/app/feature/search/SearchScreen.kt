@@ -22,26 +22,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.twedmusic.app.TwedMusicApp
 import com.twedmusic.app.R
-import com.twedmusic.app.feature.playback.engine.BassPlayerAdapter
 import com.twedmusic.app.core.designsystem.components.PlaylistRow
 import com.twedmusic.app.core.designsystem.components.TrackRow
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
-import kotlinx.coroutines.delay
-
-/**
- * Delay del debounce en milisegundos antes de ejecutar la búsqueda
- * tras el último cambio en el campo de texto. Evita consultas
- * excesivas a Room mientras el usuario escribe.
- */
-private const val SEARCH_DEBOUNCE_MS = 300L
-
+import androidx.lifecycle.viewmodel.compose.viewModel
 /**
  * Pantalla de búsqueda global de TwedMusic.
  *
@@ -76,47 +65,21 @@ private const val SEARCH_DEBOUNCE_MS = 300L
 @Composable
 fun SearchScreen(
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: SearchViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    // Singletons de los repositorios desde la Application
-    val audioRepository = remember {
-        (context.applicationContext as TwedMusicApp).audioRepository
-    }
-    val playlistRepository = remember {
-        (context.applicationContext as TwedMusicApp).playlistRepository
-    }
-    val coverRepository = remember {
-        (context.applicationContext as TwedMusicApp).coverRepository
-    }
-    // Singleton de PlaybackController desde la Application
-    val playbackController = remember {
-        (context.applicationContext as TwedMusicApp).playbackController
-    }
+    val currentPlayingMediaId by viewModel.currentMediaId.collectAsState()
 
-    // Flow reactivo del controller: mediaId de la pista actualmente en reproducción
-    val currentPlayingMediaId by playbackController.currentMediaId.collectAsState()
-
-    // Estado del campo de búsqueda
-    var query by remember { mutableStateOf("") }
-    var debouncedQuery by remember { mutableStateOf("") }
-
-    // Debounce: actualiza debouncedQuery 300ms después del último cambio
-    LaunchedEffect(query) {
-        delay(SEARCH_DEBOUNCE_MS)
-        debouncedQuery = query
-    }
-
-    // Resultados reactivos: se re-emiten cuando cambia debouncedQuery
-    // o cuando las tablas subyacentes cambian
-    val songs by audioRepository.searchSongs(debouncedQuery)
-        .collectAsState(initial = emptyList())
-    val playlists by playlistRepository.searchPlaylists(debouncedQuery)
-        .collectAsState(initial = emptyList())
+    // Texto del campo y resultados (ya con debounce) vienen del ViewModel
+    val query by viewModel.query.collectAsState()
+    val state by viewModel.uiState.collectAsState()
+    val songs = state.songs
+    val playlists = state.playlists
+    val debouncedQuery = state.debouncedQuery
 
     Column(
         modifier = modifier
@@ -127,7 +90,7 @@ fun SearchScreen(
         // Campo de búsqueda
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = viewModel::onQueryChange,
             label = { Text(stringResource(R.string.search_hint)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
@@ -182,7 +145,7 @@ fun SearchScreen(
                         items = songs,
                         key = { "song-${it.id}" }
                     ) { song ->
-                        val coverFile = coverRepository.coverFile(song.path)
+                        val coverFile = viewModel.coverFile(song.path)
                         // ¿Esta canción es la que está sonando ahora?
                         val isCurrentTrack = song.id.toString() == currentPlayingMediaId
 
@@ -190,13 +153,7 @@ fun SearchScreen(
                             song = song,
                             coverFile = coverFile,
                             isCurrentTrack = isCurrentTrack,
-                            onClick = {
-                                playbackController.playSong(
-                                    song = song,
-                                    queueId = BassPlayerAdapter.QUEUE_SEARCH,
-                                    queueSongs = songs
-                                )
-                            },
+                            onClick = { viewModel.onSongClick(song, songs) },
                             onMoreClick = { /* TODO: menú contextual */ }
                         )
                     }

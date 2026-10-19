@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Controller centralizado de reproducción para toda la app.
@@ -40,8 +43,10 @@ import kotlinx.coroutines.withContext
  *
  * ## Uso
  * ```kotlin
- * val controller = (context.applicationContext as TwedMusicApp)
- *     .playbackController
+ * // Se inyecta por constructor (Hilt) en ViewModels y servicios:
+ * class TracksViewModel @Inject constructor(
+ *     private val controller: PlaybackController
+ * ) : ViewModel()
  *
  * // Reproducir canción en cola de búsqueda
  * controller.playSong(song, BassPlayerAdapter.QUEUE_SEARCH, allSearchSongs)
@@ -57,8 +62,9 @@ import kotlinx.coroutines.withContext
  * connection). Si la conexión falla, los métodos de control no hacen
  * nada (degradación elegante).
  */
-class PlaybackController(
-    private val context: Context,
+@Singleton
+class PlaybackController @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val coverRepository: CoverRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
