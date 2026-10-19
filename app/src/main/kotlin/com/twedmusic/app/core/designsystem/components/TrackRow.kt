@@ -23,9 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -35,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import coil3.size.Size
+import coil3.size.Size as CoilSize
 import com.twedmusic.app.R
 import com.twedmusic.app.core.model.Song
 import com.twedmusic.app.core.designsystem.theme.LocalCoverPlaceholderIconColor
@@ -45,35 +44,8 @@ import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 import java.io.File
 
-/**
- * Borde izquierdo de la carátula respecto al borde de la fila.
- * Replica el padding start de 24dp aplicado al Box de la carátula;
- * se declara como constante para poder calcular la geometría del
- * recuadro indicador sin alterar el layout existente.
- */
-private val CoverLeftEdge = 24.dp
-
-/**
- * Borde derecho del glifo more vert respecto al borde derecho de la
- * fila: 15dp de padding end del Row + 10dp de centrado del glifo de
- * 24dp dentro de su área de toque de 44dp (15 + 10 = 25dp).
- */
-private val MoreGlyphRightEdgeFromEnd = 25.dp
-
-/** Grosor del trazo del recuadro indicador de pista actual. */
-private val CurrentTrackBorderStroke = 2.dp
-
-/**
- * Separación óptica entre el borde interno del trazo del recuadro y
- * la carátula (lado izquierdo) o el glifo more vert (lado derecho).
- */
-private val CurrentTrackBorderGap = 4.dp
-
-/**
- * Radio exterior de las esquinas del recuadro indicador.
- * Valor óptico proporcional al contenedor de 64dp.
- */
-private val CurrentTrackBorderCorner = 12.dp
+/** Grosor de la barra vertical izquierda del indicador de pista actual. */
+private val CurrentTrackAccentWidth = 3.dp
 
 /**
  * Contenedor de pista individual para listas de reproducción.
@@ -82,7 +54,7 @@ private val CurrentTrackBorderCorner = 12.dp
  * borde), con área táctil en toda la superficie para iniciar la
  * reproducción al tocar cualquier parte de la fila.
  *
- * ## Composición visual
+ * \## Composición visual
  * - **Carátula** (izquierda, 52×52dp, esquinas 8dp): cargada vía
  *   Coil desde el archivo de portada extraído por TagLib durante
  *   el escaneo. Si la canción no tiene portada, se muestra un
@@ -102,29 +74,25 @@ private val CurrentTrackBorderCorner = 12.dp
  *   óptico superior e inferior (20 + 24 + 20 = 64dp). Con callback
  *   [onMoreClick] independiente del tap de reproducción de la fila.
  *
- * ## Indicador de pista actual
- * Cuando [isCurrentTrack] es true, se dibuja un recuadro bordeado
- * como overlay puramente visual (trazo de 2dp, esquinas de 12dp):
- * - Línea vertical izquierda a 4dp ópticos de la carátula.
- * - Línea vertical derecha a 4dp ópticos del glifo more vert.
- * - Líneas superior e inferior en el límite del contenedor (64dp),
- *   sin sobrepasarlo ni invadir las filas contiguas.
- * El color proviene de [LocalCurrentTrackBorderColor] (#1C1B1F
- * claro, #E6E1E5 oscuro). El contenedor real NO se modifica: sigue
- * siendo 64dp de alto y ancho completo, y su fondo permanece con el
- * color de fondo del tema (el antiguo fondo de color del indicador
- * se eliminó por ser un indicador genérico). El indicador se
- * actualiza reactivamente según el estado del reproductor (no según
- * taps del usuario), por lo que tocar repetidamente la misma pista
- * no causa parpadeo.
+ * \## Indicador de pista actual
+ * Cuando [isCurrentTrack] es true, se dibuja una barra vertical
+ * izquierda de [CurrentTrackAccentWidth] (3dp) a lo alto de la fila,
+ * como overlay puramente visual (no altera el layout ni desplaza
+ * carátula o textos). El color proviene de
+ * [LocalCurrentTrackBorderColor] (highContrast: #1C1B1F claro,
+ * #E6E1E5 oscuro). El contenedor real NO se modifica: sigue siendo
+ * 64dp de alto y ancho completo. El indicador se actualiza de forma
+ * reactiva según el estado del reproductor (no según taps del
+ * usuario), por lo que tocar repetidamente la misma pista no causa
+ * parpadeo.
  *
- * ## Sin ripple de Material
+ * \## Sin ripple de Material
  * El efecto de onda (ripple) al tocar está deshabilitado en toda
  * la fila y en el botón more vert, usando `indication = null` con
  * un InteractionSource propio. El click sigue siendo funcional pero
  * sin feedback visual de toque.
  *
- * ## Optimización de memoria de carátulas
+ * \## Optimización de memoria de carátulas
  * La carátula se carga vía [ImageRequest] con tamaño fijo de 52dp
  * (convertido a píxeles según densidad de pantalla). Coil hace
  * downsampling durante el decode (inSampleSize) en vez de cargar
@@ -132,7 +100,7 @@ private val CurrentTrackBorderCorner = 12.dp
  * de memoria al scrollear listas largas. El resultado visual es
  * idéntico (la carátula ya se renderiza a 52×52dp).
  *
- * ## Separaciones ópticas
+ * \## Separaciones ópticas
  * - Carátula al borde izquierdo: 24dp (igual que el margen del
  *   título de pestaña y conteo).
  * - Carátula a los textos: 16dp.
@@ -143,7 +111,7 @@ private val CurrentTrackBorderCorner = 12.dp
  * - Separación vertical título-artista: 4dp.
  * - Separación vertical entre filas: 0dp (las filas se tocan).
  *
- * ## Garantía de integridad de carátulas
+ * \## Garantía de integridad de carátulas
  * El archivo de portada proviene de [com.twedmusic.app.core.data.repository.CoverRepository],
  * que guarda cada portada con nombre = MD5(path de la canción) + extensión.
  * Coil cachea por ruta de archivo, y el LazyColumn que contiene estas
@@ -154,8 +122,8 @@ private val CurrentTrackBorderCorner = 12.dp
  * @param coverFile Archivo de portada en disco (null si la canción
  *                  no tiene portada extraída).
  * @param isCurrentTrack true si esta canción es la que está sonando
- *                       actualmente en el reproductor. Dibuja el
- *                       recuadro bordeado indicador sobre la fila.
+ *                       actualmente en el reproductor. Dibuja la
+ *                       barra vertical izquierda de acento.
  * @param onClick Callback invocado al tocar cualquier parte de la fila.
  *                La lógica de reproducción vive en la pantalla padre.
  * @param onMoreClick Callback invocado al tocar el icono more vert.
@@ -175,15 +143,15 @@ fun TrackRow(
     val metaColor = LocalListItemMetaColor.current
     val placeholderBg = MaterialTheme.colorScheme.surfaceVariant
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
-    val currentTrackBorderColor = LocalCurrentTrackBorderColor.current
+    val currentTrackAccentColor = LocalCurrentTrackBorderColor.current
     val density = LocalDensity.current
 
     // InteractionSource propio para deshabilitar el ripple de Material
     val rowInteractionSource = remember { MutableInteractionSource() }
 
     // Fondo del Row: siempre el color de fondo del tema. El indicador
-    // de pista actual ahora es el recuadro bordeado que se dibuja en
-    // el drawWithContent más abajo (overlay puramente visual).
+    // de pista actual es la barra vertical izquierda dibujada en
+    // drawWithContent (overlay puramente visual).
     val rowBackground = MaterialTheme.colorScheme.background
 
     // Tamaño del thumbnail de la carátula en píxeles para Coil.
@@ -198,52 +166,16 @@ fun TrackRow(
             .fillMaxWidth()
             .height(64.dp)
             .background(rowBackground)
-            // Recuadro indicador de pista actual (overlay visual).
-            // Se dibuja DESPUÉS del contenido para garantizar su
-            // visibilidad; no interseca carátula, textos ni iconos
-            // porque vive en los márgenes ópticos de la fila.
+            // Barra vertical izquierda: indicador de pista actual.
+            // Se dibuja DESPUÉS del contenido; no desplaza layout.
             .drawWithContent {
                 drawContent()
                 if (isCurrentTrack) {
-                    val strokePx = CurrentTrackBorderStroke.toPx()
-                    val halfPx = strokePx / 2f
-
-                    // Centro del trazo vertical izquierdo: borde de la
-                    // carátula (24dp) - separación óptica (4dp) - medio
-                    // trazo (1dp) = 19dp. El borde interno del trazo
-                    // queda exactamente a 4dp de la carátula.
-                    val leftCenterPx =
-                        (CoverLeftEdge - CurrentTrackBorderGap).toPx() - halfPx
-
-                    // Centro del trazo vertical derecho: borde del glifo
-                    // more vert (25dp desde el final) - separación óptica
-                    // (4dp) - medio trazo (1dp) = 20dp desde el borde
-                    // derecho de la fila. El borde interno del trazo
-                    // queda exactamente a 4dp del glifo.
-                    val rightCenterPx =
-                        size.width - ((MoreGlyphRightEdgeFromEnd - CurrentTrackBorderGap).toPx() - halfPx)
-
-                    // Trazo superior e inferior centrados a medio trazo
-                    // del límite del contenedor: ocupan [0, 2dp] y
-                    // [62dp, 64dp] sin invadir las filas contiguas.
-                    drawRoundRect(
-                        color = currentTrackBorderColor,
-                        topLeft = Offset(leftCenterPx, halfPx),
-                        // Nombre completo para evitar la colisión con
-                        // coil3.size.Size (usado por el ImageRequest de
-                        // la carátula). Sin este calificativo, Kotlin
-                        // no sabría cuál de las dos clases "Size" usar.
-                        size = androidx.compose.ui.geometry.Size(
-                            width = rightCenterPx - leftCenterPx,
-                            height = size.height - strokePx
-                        ),
-                        // Radio de línea centro = radio exterior (12dp)
-                        // - medio trazo, para que el borde exterior del
-                        // trazo tenga exactamente 12dp ópticos.
-                        cornerRadius = CornerRadius(
-                            CurrentTrackBorderCorner.toPx() - halfPx
-                        ),
-                        style = Stroke(strokePx)
+                    val barWidthPx = CurrentTrackAccentWidth.toPx()
+                    drawRect(
+                        color = currentTrackAccentColor,
+                        topLeft = Offset(0f, 0f),
+                        size = Size(barWidthPx, size.height)
                     )
                 }
             }
@@ -279,7 +211,7 @@ fun TrackRow(
             if (coverFile != null) {
                 val request = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                     .data(coverFile)
-                    .size(Size(thumbnailPx, thumbnailPx))
+                    .size(CoilSize(thumbnailPx, thumbnailPx))
                     .build()
                 AsyncImage(
                     model = request,
