@@ -30,7 +30,7 @@ import javax.inject.Singleton
  * [PlaybackService] y expone una API simple para controlar la
  * reproducción desde cualquier pantalla.
  *
- * ## Ventajas sobre MediaController local en cada pantalla
+ * \## Ventajas sobre MediaController local en cada pantalla
  * - **Una sola conexión**: evita que cada pantalla cree su propio
  *   MediaController (ahorra recursos y simplifica el ciclo de vida).
  * - **Flows reactivos compartidos**: `currentMediaId`, `isPlaying`,
@@ -41,7 +41,7 @@ import javax.inject.Singleton
  *   la cola, busca el índice y llama a `setMediaItems` + `play`.
  * - **Thread-safe**: todos los Flows son StateFlow con emisión en Main.
  *
- * ## Uso
+ * \## Uso
  * ```kotlin
  * // Se inyecta por constructor (Hilt) en ViewModels y servicios:
  * class TracksViewModel @Inject constructor(
@@ -57,10 +57,13 @@ import javax.inject.Singleton
  * }
  * ```
  *
- * ## Conexión automática
+ * \## Conexión automática
  * El controller se conecta a PlaybackService al primer uso (lazy
  * connection). Si la conexión falla, los métodos de control no hacen
- * nada (degradación elegante).
+ * nada (degradación elegante). Las órdenes de reproducción emitidas
+ * mientras la conexión está en curso se encolan y se ejecutan en
+ * cuanto el MediaController queda listo (evita el fallo de la primera
+ * reproducción tras un arranque en frío).
  */
 @Singleton
 class PlaybackController @Inject constructor(
@@ -71,6 +74,16 @@ class PlaybackController @Inject constructor(
 
     /** MediaController conectado a PlaybackService; null si aún no conectado. */
     private var mediaController: MediaController? = null
+
+    /** true mientras se está construyendo el MediaController de forma asíncrona. */
+    private var isConnecting: Boolean = false
+
+    /**
+     * Acción de reproducción pendiente de ejecutar en cuanto el
+     * MediaController esté listo. Solo se guarda la última orden
+     * (la más reciente del usuario).
+     */
+    private var pendingPlay: (() -> Unit)? = null
 
     // =========================================================================
     // Flows reactivos (consumidos por UI)
@@ -124,16 +137,20 @@ class PlaybackController @Inject constructor(
     /**
      * Conecta el MediaController a PlaybackService si aún no está
      * conectado. Seguro para llamar múltiples veces (idempotente).
+     * Cuando la conexión termina con éxito, ejecuta la acción
+     * pendiente de reproducción si existe.
      */
     private fun ensureConnected() {
-        if (mediaController != null) return
+        if (mediaController != null || isConnecting) return
 
+        isConnecting = true
         val token = SessionToken(
             context,
             ComponentName(context, PlaybackService::class.java)
         )
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
+            isConnecting = false
             if (future.isDone && !future.isCancelled) {
                 mediaController = runCatching { future.get() }.getOrNull()
                 mediaController?.let { ctrl ->
@@ -143,6 +160,11 @@ class PlaybackController @Inject constructor(
                     _isPlaying.value = ctrl.isPlaying
                     _currentPositionMs.value = ctrl.currentPosition
                     _durationMs.value = ctrl.duration
+
+                    // Ejecutar la reproducción que quedó pendiente (si la hay)
+                    val action = pendingPlay
+                    pendingPlay = null
+                    action?.invoke()
                 }
             }
         }, ContextCompat.getMainExecutor(context))
@@ -157,6 +179,10 @@ class PlaybackController @Inject constructor(
      * cola completa con [queueSongs] y saltando directamente a la
      * canción objetivo.
      *
+     * Si el MediaController aún no está conectado (arranque en frío),
+     * la orden se encola y se ejecuta automáticamente en cuanto la
+     * conexión termina.
+     *
      * @param song Canción a reproducir.
      * @param queueId Identificador de la cola (ej. QUEUE_TRACKS_BY_DATE,
      *                QUEUE_SEARCH, QUEUE_RECENTLY_PLAYED).
@@ -164,34 +190,44 @@ class PlaybackController @Inject constructor(
      *                   orden deseado. [song] debe estar en esta lista.
      */
     fun playSong(song: Song, queueId: String, queueSongs: List<Song>) {
-        ensureConnected()
-        val ctrl = mediaController ?: return
+        val playAction: () -> Unit = {
+            val ctrl = mediaController ?: return@playAction
 
-        scope.launch {
-            val targetMediaId = song.id.toString()
-            val startIndex = queueSongs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+            scope.launch {
+                val targetMediaId = song.id.toString()
+                val startIndex = queueSongs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
 
-            // Construir MediaItems con carátulas
-            val mediaItems = withContext(Dispatchers.IO) {
-                queueSongs.mapIndexed { i, s ->
-                    val item = s.toMediaItem(coverRepository)
-                    // Agregar queueId al tag del primer MediaItem
-                    if (i == 0) {
-                        MediaItem.Builder()
-                            .setMediaId(item.mediaId)
-                            .setUri(item.localConfiguration?.uri)
-                            .setMediaMetadata(item.mediaMetadata)
-                            .setTag(queueId)
-                            .build()
-                    } else {
-                        item
+                // Construir MediaItems con carátulas
+                val mediaItems = withContext(Dispatchers.IO) {
+                    queueSongs.mapIndexed { i, s ->
+                        val item = s.toMediaItem(coverRepository)
+                        // Agregar queueId al tag del primer MediaItem
+                        if (i == 0) {
+                            MediaItem.Builder()
+                                .setMediaId(item.mediaId)
+                                .setUri(item.localConfiguration?.uri)
+                                .setMediaMetadata(item.mediaMetadata)
+                                .setTag(queueId)
+                                .build()
+                        } else {
+                            item
+                        }
                     }
                 }
-            }
 
-            ctrl.setMediaItems(mediaItems, startIndex, 0L)
-            ctrl.prepare()
-            ctrl.play()
+                ctrl.setMediaItems(mediaItems, startIndex, 0L)
+                ctrl.prepare()
+                ctrl.play()
+            }
+        }
+
+        if (mediaController != null) {
+            // Ya conectado: reproducir de inmediato
+            playAction()
+        } else {
+            // Encolar y disparar la conexión (si no está en curso)
+            pendingPlay = playAction
+            ensureConnected()
         }
     }
 
@@ -221,6 +257,8 @@ class PlaybackController @Inject constructor(
 
     /** Libera el MediaController. Llamar desde onDestroy de la Application. */
     fun release() {
+        pendingPlay = null
+        isConnecting = false
         mediaController?.removeListener(playerListener)
         mediaController?.release()
         mediaController = null
