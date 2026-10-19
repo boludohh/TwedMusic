@@ -190,7 +190,7 @@ class PlaybackController @Inject constructor(
      *                   orden deseado. [song] debe estar en esta lista.
      */
     fun playSong(song: Song, queueId: String, queueSongs: List<Song>) {
-        val playAction: () -> Unit = {
+        val playAction: () -> Unit = playAction@{
             val ctrl = mediaController ?: return@playAction
 
             scope.launch {
