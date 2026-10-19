@@ -8,10 +8,15 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.provider.MediaStore
+import com.twedmusic.app.core.audio.SupportedAudioFormats
 import com.twedmusic.app.core.datastore.AppPreferences
 import com.twedmusic.app.core.database.AppDatabase
 import com.twedmusic.app.core.database.SongEntity
 import com.simplecityapps.ktaglib.KTagLib
+import com.twedmediainfo.android.StreamKind
+import com.twedmediainfo.android.TwedMediaInfo
+import com.twedmediainfo.android.parameters.Audio
+import com.twedmediainfo.android.parameters.General
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,21 +37,25 @@ import javax.inject.Singleton
 /**
  * Orquesta el escaneo y sincronización de la biblioteca musical.
  *
- * ## Fuentes de datos
+ * \## Fuentes de datos
  * - **MediaStore**: descubre archivos de audio del dispositivo
  *   (`IS_MUSIC != 0`). Es la fuente primaria de `id`, `path`,
  *   `duration`, `dateAdded` y valores de respaldo para `title`/`artist`.
- * - **KTagLib**: extracción estricta de metadatos usando TagLib 2.3.2.
- *   Tiene prioridad sobre MediaStore para `title` y `artist`; si no
- *   devuelve valor, se usa el de MediaStore. También actúa como validador
- *   de formato: si KTagLib no puede leer el archivo, se descarta.
+ * - **TwedMediaInfo**: filtro de códec/contenedor en todo el ciclo de
+ *   escaneo (completo, incremental y ContentObserver). Solo se indexan
+ *   formatos reproducibles por BASS con los plugins empaquetados
+ *   (ver [SupportedAudioFormats]).
+ * - **KTagLib**: extracción de metadatos de usuario (título, artista,
+ *   álbum, etc.) con TagLib 2.3.2. Tiene prioridad sobre MediaStore;
+ *   si no devuelve valor, se usa el de MediaStore. Ya no actúa como
+ *   validador de formato (esa responsabilidad es de TwedMediaInfo).
  * - **CoverRepository**: extracción y guardado de la portada
  *   embebida en el mismo pipeline, junto con los metadatos.
  * - **Room**: caché reconstruible (ver AppDatabase).
  * - **DataStore (AppPreferences)**: timestamp del último escaneo
  *   (`last_scan_seconds`), usado por el mecanismo incremental.
  *
- * ## Tres mecanismos de sincronización
+ * \## Tres mecanismos de sincronización
  *
  * 1. **Escaneo completo inicial** (`syncIfNeeded`): si Room está
  *    vacío (primera apertura o después de reinstalar), se corre
@@ -71,7 +80,7 @@ import javax.inject.Singleton
  *    **No tiene throttling** porque el ContentObserver ya aplica
  *    su propio debounce y es crítico detectar cambios en caliente.
  *
- * ## Detección de eliminaciones externas
+ * \## Detección de eliminaciones externas
  *
  * Al final de cada sync, se obtiene un snapshot de la tabla y se
  * borran en batch las filas cuyo `path` ya no existe en disco
@@ -79,19 +88,19 @@ import javax.inject.Singleton
  * elimina también su archivo de portada** en `CoverRepository`,
  * de modo que nunca quedan imágenes huérfanas.
  *
- * ## Pipeline por archivo (orden estricto)
+ * \## Pipeline por archivo (orden estricto)
  *
  * 1. Filtro fantasma: path nulo o `File(path)` inexistente.
  * 2. Duración mínima: 30.000 ms (descarta tonos y notificaciones).
- * 3. Extracción KTagLib con FileDescriptor: valida formato y extrae metadatos.
- *    - Si KTagLib devuelve null, el archivo se descarta (formato inválido).
- *    - `title` y `artist` de KTagLib si están presentes, si no,
- *      fallback a los valores obtenidos de MediaStore.
- * 4. Extracción y guardado de portada (idempotente):
+ * 3. Filtro de códec con TwedMediaInfo + [SupportedAudioFormats]:
+ *    si el contenedor/códec no está permitido, se descarta.
+ * 4. Extracción KTagLib con FileDescriptor (solo metadatos de usuario).
+ *    - Si KTagLib no puede leer tags, se usan los valores de MediaStore.
+ * 5. Extracción y guardado de portada (idempotente):
  *    `CoverRepository.extractAndSaveCover(path)`. Si el archivo
  *    ya existe en disco, no hace nada.
- * 5. Construcción de [SongEntity].
- * 6. Emisión en lotes de 300 (no acumular toda la biblioteca en
+ * 6. Construcción de [SongEntity].
+ * 7. Emisión en lotes de 300 (no acumular toda la biblioteca en
  *    memoria antes de insertar).
  *
  * Todo el trabajo corre con prioridad BACKGROUND y en
@@ -141,7 +150,7 @@ class AudioRepository @Inject constructor(
     /** Timestamp (ms del reloj del sistema) del último incrementalScan ejecutado. */
     private var lastIncrementalScanTimeMs: Long = 0L
 
-    /** Instancia de KTagLib para extracción de metadatos. */
+    /** Instancia de KTagLib para extracción de metadatos de usuario. */
     private val kTagLib = KTagLib()
 
     // =========================================================================
@@ -249,8 +258,9 @@ class AudioRepository @Inject constructor(
     // =========================================================================
 
     /**
-     * Flow de lotes de canciones obtenidas de MediaStore y
-     * validadas/enriquecidas por KTagLib y extracción de portada.
+     * Flow de lotes de canciones obtenidas de MediaStore,
+     * filtradas por códec con TwedMediaInfo y enriquecidas con
+     * KTagLib (tags) y extracción de portada.
      *
      * @param isFull true = escaneo completo (sin filtros de tiempo).
      * @param sinceSeconds timestamp epoch en segundos; sólo se
@@ -284,95 +294,119 @@ class AudioRepository @Inject constructor(
 
         val batch = ArrayList<SongEntity>(batchSize)
 
-        contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
-        )?.use { cursor ->
-            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val dataIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-            val displayNameIndex =
-                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-            val dateAddedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+        // Una sola instancia de MediaInfo por lote de escaneo.
+        // closeFile() entre archivos; close() al terminar el cursor.
+        TwedMediaInfo().use { mediaInfo ->
+            contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
+            )?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val dataIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val displayNameIndex =
+                    cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val dateAddedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idIndex)
-                val path = cursor.getString(dataIndex).orEmpty()
-                val mediaStoreTitle = cursor.getString(titleIndex).orEmpty()
-                    .ifEmpty { cursor.getString(displayNameIndex).orEmpty() }
-                val mediaStoreArtist = cursor.getString(artistIndex).orEmpty()
-                val mediaStoreAlbum = cursor.getString(albumIndex).orEmpty()
-                val durationMs = cursor.getLong(durationIndex)
-                val dateAdded = cursor.getLong(dateAddedIndex)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idIndex)
+                    val path = cursor.getString(dataIndex).orEmpty()
+                    val mediaStoreTitle = cursor.getString(titleIndex).orEmpty()
+                        .ifEmpty { cursor.getString(displayNameIndex).orEmpty() }
+                    val mediaStoreArtist = cursor.getString(artistIndex).orEmpty()
+                    val mediaStoreAlbum = cursor.getString(albumIndex).orEmpty()
+                    val durationMs = cursor.getLong(durationIndex)
+                    val dateAdded = cursor.getLong(dateAddedIndex)
 
-                // 1. Filtro fantasma
-                if (path.isEmpty() || !File(path).exists()) continue
+                    // 1. Filtro fantasma
+                    if (path.isEmpty() || !File(path).exists()) continue
 
-                // 2. Duración mínima
-                if (durationMs < minDurationMs) continue
+                    // 2. Duración mínima
+                    if (durationMs < minDurationMs) continue
 
-                // 3. Extracción KTagLib con FileDescriptor (valida formato y extrae metadatos)
-                val metadata = FileDescriptorHelper.useFd(path) { fd ->
-                    kTagLib.getMetadata(fd, File(path).name)
-                } ?: continue // Si KTagLib devuelve null, el archivo es inválido
+                    // 3. Filtro de códec / contenedor (TwedMediaInfo)
+                    if (!isFormatAllowed(mediaInfo, path)) continue
 
-                // Mapeo de propertyMap (KTagLib usa mayúsculas, nosotros minúsculas)
-                val propertyMap = metadata.propertyMap
-                val title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
-                    ?: mediaStoreTitle
-                val artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
-                    ?: mediaStoreArtist
+                    // 4. Extracción KTagLib (solo metadatos de usuario)
+                    val metadata = FileDescriptorHelper.useFd(path) { fd ->
+                        kTagLib.getMetadata(fd, File(path).name)
+                    }
 
-                // 4. Extracción y guardado de portada inline (idempotente).
-                //    Si el archivo ya existe en disco, extractAndSaveCover
-                //    retorna sin hacer I/O pesado. Se ejecuta en el mismo
-                //    hilo BACKGROUND del escaneo.
-                coverRepository.extractAndSaveCover(path)
+                    val propertyMap = metadata?.propertyMap
+                    val title = propertyMap?.get("TITLE")?.firstOrNull()?.takeIf { it.isNotBlank() }
+                        ?: mediaStoreTitle
+                    val artist = propertyMap?.get("ARTIST")?.firstOrNull()?.takeIf { it.isNotBlank() }
+                        ?: mediaStoreArtist
 
-                // 5. Construcción de SongEntity
-                val entity = SongEntity(
-                    id = id,
-                    title = title,
-                    artist = artist,
-                    album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() }
-                        ?: mediaStoreAlbum.takeIf { it.isNotBlank() },
-                    albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                    genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                    composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                    lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                    trackNumber = propertyMap["TRACKNUMBER"]?.firstOrNull()?.parseSlashFirst(),
-                    discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.parseSlashFirst(),
-                    year = propertyMap["DATE"]?.firstOrNull()?.parseYear(),
-                    duration = durationMs,
-                    path = path,
-                    bitrate = metadata.audioProperties?.bitrate,
-                    sampleRate = metadata.audioProperties?.sampleRate,
-                    channels = metadata.audioProperties?.channelCount,
-                    dateAdded = dateAdded
-                )
+                    // 5. Extracción y guardado de portada inline (idempotente).
+                    coverRepository.extractAndSaveCover(path)
 
-                batch += entity
+                    // 6. Construcción de SongEntity
+                    val entity = SongEntity(
+                        id = id,
+                        title = title,
+                        artist = artist,
+                        album = propertyMap?.get("ALBUM")?.firstOrNull()?.takeIf { it.isNotBlank() }
+                            ?: mediaStoreAlbum.takeIf { it.isNotBlank() },
+                        albumArtist = propertyMap?.get("ALBUMARTIST")?.firstOrNull()
+                            ?.takeIf { it.isNotBlank() },
+                        genre = propertyMap?.get("GENRE")?.firstOrNull()?.takeIf { it.isNotBlank() },
+                        composer = propertyMap?.get("COMPOSER")?.firstOrNull()
+                            ?.takeIf { it.isNotBlank() },
+                        lyrics = propertyMap?.get("LYRICS")?.firstOrNull()?.takeIf { it.isNotBlank() },
+                        trackNumber = propertyMap?.get("TRACKNUMBER")?.firstOrNull()?.parseSlashFirst(),
+                        discNumber = propertyMap?.get("DISCNUMBER")?.firstOrNull()?.parseSlashFirst(),
+                        year = propertyMap?.get("DATE")?.firstOrNull()?.parseYear(),
+                        duration = durationMs,
+                        path = path,
+                        bitrate = metadata?.audioProperties?.bitrate,
+                        sampleRate = metadata?.audioProperties?.sampleRate,
+                        channels = metadata?.audioProperties?.channelCount,
+                        dateAdded = dateAdded
+                    )
 
-                // 6. Emitir lote cuando alcanza el tamaño configurado
-                if (batch.size >= batchSize) {
+                    batch += entity
+
+                    // 7. Emitir lote cuando alcanza el tamaño configurado
+                    if (batch.size >= batchSize) {
+                        emit(ArrayList(batch))
+                        batch.clear()
+                    }
+                }
+
+                // Emitir el último lote si quedó algo pendiente
+                if (batch.isNotEmpty()) {
                     emit(ArrayList(batch))
                     batch.clear()
                 }
             }
-
-            // Emitir el último lote si quedó algo pendiente
-            if (batch.isNotEmpty()) {
-                emit(ArrayList(batch))
-                batch.clear()
-            }
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Abre [path] con MediaInfo y comprueba contenedor + códec
+     * contra [SupportedAudioFormats]. Reutiliza [mediaInfo] entre
+     * llamadas (closeFile al terminar).
+     */
+    private fun isFormatAllowed(mediaInfo: TwedMediaInfo, path: String): Boolean {
+        if (!mediaInfo.open(path)) return false
+        try {
+            if (!mediaInfo.isRecognized) return false
+            if (mediaInfo.countStreams(StreamKind.AUDIO) < 1) return false
+
+            val container = mediaInfo.getGeneral(General.FORMAT)
+            val codec = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT)
+            return SupportedAudioFormats.isAllowed(container, codec)
+        } finally {
+            mediaInfo.closeFile()
+        }
+    }
 
     /**
      * Borra de Room las filas cuyo path ya no existe en disco y

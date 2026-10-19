@@ -83,3 +83,13 @@
 # el enlace nativo se rompe en runtime.
 -keep class com.un4seen.bass.BASSDSD { *; }
 -keepclassmembers class com.un4seen.bass.BASSDSD { *; }
+
+# ---------------------------------------------------------------------------
+# Reglas para TwedMediaInfo (JNI + API pública)
+# Preserva la API pública y la capa JNI (NativeBridge / NativeLoader).
+# Los símbolos nativos en libtwedmediainfo.so dependen de nombres exactos.
+# ---------------------------------------------------------------------------
+-keep class com.twedmediainfo.android.** { *; }
+-keepclassmembers class com.twedmediainfo.android.** { *; }
+-keep class com.twedmediainfo.android.internal.** { *; }
+-keepclassmembers class com.twedmediainfo.android.internal.** { *; }

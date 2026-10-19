@@ -25,7 +25,7 @@ android {
         applicationId = "com.twedmusic.app"
         minSdk = 27
         targetSdk = 37
-        versionCode = 1
+        versionCode = 2
         versionName = "0.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -104,6 +104,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.ktaglib)
+    implementation(libs.twedmediainfo)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
