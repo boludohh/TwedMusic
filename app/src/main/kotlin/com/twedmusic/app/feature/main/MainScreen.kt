@@ -26,7 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,9 +54,9 @@ private val BottomPanelTopBorder = 1.dp
  * Pantalla principal de TwedMusic.
  *
  * Contenedor de pestañas, top bar y **panel inferior unificado**:
- * un solo Surface con esquinas 25 dp y borde superior; dentro viven
- * el mini player (si hay sesión) y la navegación. Así el mini no
- * parece un bloque superpuesto sino la misma barra estirada.
+ * un solo Surface con esquinas 25 dp y borde superior que sigue la
+ * curvatura del panel; dentro viven el mini player (si hay sesión)
+ * y la navegación.
  *
  * Padding inferior del contenido:
  * - Solo nav: 130 dp
@@ -101,7 +104,7 @@ fun MainScreen(
             modifier = Modifier.align(Alignment.TopStart)
         )
 
-        // Panel inferior único: forma + color + borde superior
+        // Panel inferior único: forma + color + borde superior curvo
         Surface(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -109,11 +112,33 @@ fun MainScreen(
                 .drawWithContent {
                     drawContent()
                     val stroke = BottomPanelTopBorder.toPx()
-                    drawLine(
+                    val corner = BottomPanelTopCorner.toPx()
+                    // Path del borde superior: arco izq → línea → arco der
+                    val path = Path().apply {
+                        moveTo(0f, corner)
+                        arcTo(
+                            rect = Rect(0f, 0f, corner * 2f, corner * 2f),
+                            startAngleDegrees = 180f,
+                            sweepAngleDegrees = 90f,
+                            forceMoveTo = false
+                        )
+                        lineTo(size.width - corner, 0f)
+                        arcTo(
+                            rect = Rect(
+                                size.width - corner * 2f,
+                                0f,
+                                size.width,
+                                corner * 2f
+                            ),
+                            startAngleDegrees = 270f,
+                            sweepAngleDegrees = 90f,
+                            forceMoveTo = false
+                        )
+                    }
+                    drawPath(
+                        path = path,
                         color = panelBorderColor,
-                        start = Offset(0f, stroke / 2f),
-                        end = Offset(size.width, stroke / 2f),
-                        strokeWidth = stroke
+                        style = Stroke(width = stroke, cap = StrokeCap.Round)
                     )
                 },
             shape = RoundedCornerShape(
