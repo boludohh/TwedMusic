@@ -3,7 +3,7 @@ package com.twedmusic.app.feature.playback.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twedmusic.app.core.data.repository.CoverRepository
-import com.twedmusic.app.core.database.SongDao
+import com.twedmusic.app.core.database.AppDatabase
 import com.twedmusic.app.feature.playback.PlaybackController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -21,6 +21,9 @@ import kotlinx.coroutines.launch
  *
  * No sustituye a [PlaybackController]: solo combina sus flows con
  * metadata de Room y la ruta de portada para la capa visual.
+ *
+ * Room se accede vía [AppDatabase] (proveído por Hilt en DatabaseModule);
+ * no se inyecta SongDao directamente porque el módulo solo registra la DB.
  */
 data class PlayerUiState(
     /** true cuando hay una sesión activa (mediaId no nulo). */
@@ -38,23 +41,22 @@ data class PlayerUiState(
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val playbackController: PlaybackController,
-    private val songDao: SongDao,
+    database: AppDatabase,
     private val coverRepository: CoverRepository
 ) : ViewModel() {
+
+    private val songDao = database.songDao()
 
     /**
      * Metadata de la pista actual (título, artista, path) resuelta
      * desde Room a partir de [PlaybackController.currentMediaId].
+     * [mapLatest] permite llamar a [getById] (suspend) de forma segura.
      */
     private val currentSongInfo = playbackController.currentMediaId
-        .map { mediaId ->
-            val id = mediaId?.toLongOrNull()
-            if (id == null) {
-                null
-            } else {
-                songDao.getById(id)?.let { entity ->
-                    Triple(entity.title, entity.artist, entity.path)
-                }
+        .mapLatest { mediaId ->
+            val id = mediaId?.toLongOrNull() ?: return@mapLatest null
+            songDao.getById(id)?.let { entity ->
+                Triple(entity.title, entity.artist, entity.path)
             }
         }
         .distinctUntilChanged()
