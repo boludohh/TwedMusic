@@ -24,8 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.twedmusic.app.feature.main.components.BottomNavigationPanel
 import com.twedmusic.app.feature.main.components.TopActionBar
 import com.twedmusic.app.feature.playback.ui.MiniPlayer
@@ -46,10 +46,14 @@ import com.twedmusic.app.feature.tabs.tracks.TracksScreen
  * Padding inferior del contenido:
  * - Solo nav: 130 dp
  * - Nav + mini player visible: 194 dp (130 + 64)
+ *
+ * [PlayerViewModel] se obtiene con [viewModel], el mismo patrón que
+ * TracksScreen / resto de pestañas (Activity @AndroidEntryPoint +
+ * @HiltViewModel). No usa hilt-navigation-compose.
  */
 @Composable
 fun MainScreen(
-    playerViewModel: PlayerViewModel = hiltViewModel()
+    playerViewModel: PlayerViewModel = viewModel()
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(NavTab.HOME) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
