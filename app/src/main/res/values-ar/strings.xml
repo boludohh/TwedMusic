@@ -86,4 +86,8 @@
     <string name="album_detail_total_duration_hours_minutes">%1$d س %2$d د</string>
     <string name="album_detail_total_duration_minutes">%1$d د</string>
     <string name="album_detail_tracks_count_format">%1$d مقطوعات</string>
+    <string name="cd_play">تشغيل</string>
+    <string name="cd_pause">إيقاف مؤقت</string>
+    <string name="cd_skip_next">التالي</string>
+    <string name="cd_skip_previous">السابق</string>
 </resources>

@@ -86,4 +86,8 @@
     <string name="album_detail_total_duration_hours_minutes">%1$d h %2$d min</string>
     <string name="album_detail_total_duration_minutes">%1$d min</string>
     <string name="album_detail_tracks_count_format">%1$d pistas</string>
+    <string name="cd_play">Reproducir</string>
+    <string name="cd_pause">Pausar</string>
+    <string name="cd_skip_next">Siguiente</string>
+    <string name="cd_skip_previous">Anterior</string>
 </resources>
