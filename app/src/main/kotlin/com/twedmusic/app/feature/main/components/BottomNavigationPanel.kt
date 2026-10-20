@@ -1,6 +1,7 @@
 package com.twedmusic.app.feature.main.components
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,42 +17,29 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.twedmusic.app.R
-import com.twedmusic.app.feature.main.NavTab
 import com.twedmusic.app.core.designsystem.theme.LocalNavIconActiveColor
 import com.twedmusic.app.core.designsystem.theme.LocalNavIconInactiveColor
+import com.twedmusic.app.feature.main.NavTab
+
 /**
- * Panel inferior de navegación de TwedMusic.
+ * Contenido de iconos del panel inferior de navegación.
  *
- * Contiene los iconos de las pestañas de navegación con:
- * - Transición crossfade entre estados outline (inactivo) y filled (activo)
- * - Animación de elevación: el icono activo sube 10dp suavemente
- * - El crossfade y la elevación ocurren simultáneamente (300ms)
+ * Forma, color de fondo y borde superior los aporta el contenedor
+ * unificado en [com.twedmusic.app.feature.main.MainScreen], para que
+ * mini player y nav sean el mismo panel.
  *
- * Pestañas disponibles (en orden):
- * 1. Home (Inicio)
- * 2. Tracks (Pistas)
- * 3. Albums (Álbumes)
- * 4. Artists (Artistas)
- * 5. Playlists (Listas de reproducción)
- *
- * Características:
- * - Altura fija de 130dp.
- * - Esquinas superiores redondeadas de 25dp.
- * - Color de fondo adaptativo según el tema (usa surfaceVariant).
- * - Compatible con Edge-to-Edge.
- * - Efecto ripple desactivado para un aspecto más limpio al hacer clic.
+ * - Altura fija de 130 dp (incluye padding de navigationBars).
+ * - Crossfade outline/filled + elevación del icono activo (300 ms).
+ * - Sin ripple.
  */
 @Composable
 fun BottomNavigationPanel(
@@ -59,44 +47,29 @@ fun BottomNavigationPanel(
     onTabSelected: (NavTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(130.dp),
-        shape = RoundedCornerShape(topStart = 25.dp, topEnd = 25.dp),
-        color = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+            .height(130.dp)
+            .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.navigationBars)
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                NavTab.entries.forEach { tab ->
-                    NavIcon(
-                        tab = tab,
-                        isSelected = selectedTab == tab,
-                        onClick = { onTabSelected(tab) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+            NavTab.entries.forEach { tab ->
+                NavIcon(
+                    tab = tab,
+                    isSelected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
 }
 
-/**
- * Icono de navegación individual con:
- * - Transición crossfade entre outline y filled
- * - Animación de elevación vertical (0dp inactivo, -10dp activo)
- * - Ambas animaciones sincronizadas en 300ms
- *
- * El efecto visual de ripple está desactivado intencionalmente.
- */
 @Composable
 private fun NavIcon(
     tab: NavTab,
@@ -106,11 +79,8 @@ private fun NavIcon(
 ) {
     val activeColor = LocalNavIconActiveColor.current
     val inactiveColor = LocalNavIconInactiveColor.current
-    
-    // InteractionSource para desactivar el ripple effect
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Animación de elevación: sube 10dp cuando está activo
     val offsetAnimation by animateDpAsState(
         targetValue = if (isSelected) (-10).dp else 0.dp,
         animationSpec = tween(durationMillis = 300),
@@ -129,7 +99,7 @@ private fun NavIcon(
         modifier = modifier
             .fillMaxHeight()
             .size(48.dp)
-            .offset(y = offsetAnimation) // Aplicar elevación animada
+            .offset(y = offsetAnimation)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
