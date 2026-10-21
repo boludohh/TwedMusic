@@ -7,6 +7,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.twedmusic.app.feature.main.components.BottomNavigationPanel
 import com.twedmusic.app.feature.main.components.TopActionBar
 import com.twedmusic.app.feature.playback.ui.MiniPlayer
+import com.twedmusic.app.feature.playback.ui.NowPlayingScreen
 import com.twedmusic.app.feature.playback.ui.PlayerViewModel
 import com.twedmusic.app.feature.search.SearchScreen
 import com.twedmusic.app.feature.tabs.albums.AlbumsScreen
@@ -44,23 +48,16 @@ import com.twedmusic.app.feature.tabs.home.HomeScreen
 import com.twedmusic.app.feature.tabs.playlist.PlaylistScreen
 import com.twedmusic.app.feature.tabs.tracks.TracksScreen
 
-/** Esquinas superiores del panel inferior unificado (nav ± mini player). */
 private val BottomPanelTopCorner = 25.dp
-
-/** Grosor del borde superior del panel (siempre visible). */
 private val BottomPanelTopBorder = 1.dp
 
 /**
  * Pantalla principal de TwedMusic.
  *
- * Contenedor de pestañas, top bar y **panel inferior unificado**:
- * un solo Surface con esquinas 25 dp y borde superior que sigue la
- * curvatura del panel; dentro viven el mini player (si hay sesión)
- * y la navegación.
- *
- * Padding inferior del contenido:
- * - Solo nav: 130 dp
- * - Nav + mini: 194 dp (130 + 64)
+ * Panel inferior unificado + Now Playing a pantalla completa:
+ * - Abrir: tap en mini o swipe up (misma animación slide desde abajo).
+ * - Cerrar: back del sistema o swipe down en Now Playing.
+ * - Fondo de Now Playing = background del tema (#000000 en oscuro).
  */
 @Composable
 fun MainScreen(
@@ -68,10 +65,16 @@ fun MainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(NavTab.HOME) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
+    var isNowPlayingOpen by rememberSaveable { mutableStateOf(false) }
 
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val bottomContentPadding = if (playerState.isVisible) 194.dp else 130.dp
     val panelBorderColor = MaterialTheme.colorScheme.outline
+
+    // Si se corta el stream, cerrar Now Playing
+    LaunchedEffect(playerState.isVisible) {
+        if (!playerState.isVisible) isNowPlayingOpen = false
+    }
 
     Box(
         modifier = Modifier
@@ -104,7 +107,6 @@ fun MainScreen(
             modifier = Modifier.align(Alignment.TopStart)
         )
 
-        // Panel inferior único: forma + color + borde superior curvo
         Surface(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -113,7 +115,6 @@ fun MainScreen(
                     drawContent()
                     val stroke = BottomPanelTopBorder.toPx()
                     val corner = BottomPanelTopCorner.toPx()
-                    // Path del borde superior: arco izq → línea → arco der
                     val path = Path().apply {
                         moveTo(0f, corner)
                         arcTo(
@@ -164,7 +165,8 @@ fun MainScreen(
                         onPlayPause = playerViewModel::togglePlayPause,
                         onSkipPrevious = playerViewModel::skipToPrevious,
                         onSkipNext = playerViewModel::skipToNext,
-                        onDismiss = playerViewModel::dismissAndStop
+                        onDismiss = playerViewModel::dismissAndStop,
+                        onExpand = { isNowPlayingOpen = true }
                     )
                 }
 
@@ -174,6 +176,30 @@ fun MainScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+
+        // Now Playing: sube desde abajo (misma animación que tap / swipe)
+        AnimatedVisibility(
+            visible = isNowPlayingOpen && playerState.isVisible,
+            enter = slideInVertically(
+                animationSpec = tween(380),
+                initialOffsetY = { fullHeight -> fullHeight }
+            ) + fadeIn(animationSpec = tween(280)),
+            exit = slideOutVertically(
+                animationSpec = tween(320),
+                targetOffsetY = { fullHeight -> fullHeight }
+            ) + fadeOut(animationSpec = tween(220)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            NowPlayingScreen(
+                state = playerState,
+                onClose = { isNowPlayingOpen = false },
+                onPlayPause = playerViewModel::togglePlayPause,
+                onSkipPrevious = playerViewModel::skipToPrevious,
+                onSkipNext = playerViewModel::skipToNext,
+                onSeek = playerViewModel::seekTo,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         if (isSearchOpen) {

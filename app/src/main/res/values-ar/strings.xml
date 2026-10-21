@@ -90,4 +90,8 @@
     <string name="cd_pause">إيقاف مؤقت</string>
     <string name="cd_skip_next">التالي</string>
     <string name="cd_skip_previous">السابق</string>
+    <string name="cd_shuffle">عشوائي</string>
+    <string name="cd_repeat">تكرار</string>
+    <string name="cd_queue">قائمة الانتظار</string>
+    <string name="cd_favorite">مفضلة</string>
 </resources>

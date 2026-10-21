@@ -16,17 +16,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/**
- * Estado de UI del reproductor (mini player y, más adelante, Now Playing).
- *
- * No sustituye a [PlaybackController]: solo combina sus flows con
- * metadata de Room y la ruta de portada para la capa visual.
- *
- * Room se accede vía [AppDatabase] (proveído por Hilt en DatabaseModule);
- * no se inyecta SongDao directamente porque el módulo solo registra la DB.
- */
 data class PlayerUiState(
-    /** true cuando hay una sesión activa (mediaId no nulo). */
     val isVisible: Boolean = false,
     val title: String = "",
     val artist: String = "",
@@ -34,7 +24,6 @@ data class PlayerUiState(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
-    /** Progreso 0f..1f para la barra de solo lectura. */
     val progress: Float = 0f
 )
 
@@ -47,11 +36,6 @@ class PlayerViewModel @Inject constructor(
 
     private val songDao = database.songDao()
 
-    /**
-     * Metadata de la pista actual (título, artista, path) resuelta
-     * desde Room a partir de [PlaybackController.currentMediaId].
-     * [mapLatest] permite llamar a [getById] (suspend) de forma segura.
-     */
     private val currentSongInfo = playbackController.currentMediaId
         .mapLatest { mediaId ->
             val id = mediaId?.toLongOrNull() ?: return@mapLatest null
@@ -91,22 +75,14 @@ class PlayerViewModel @Inject constructor(
         initialValue = PlayerUiState()
     )
 
-    fun togglePlayPause() {
-        playbackController.togglePlayPause()
-    }
+    fun togglePlayPause() = playbackController.togglePlayPause()
 
-    fun skipToNext() {
-        playbackController.skipToNext()
-    }
+    fun skipToNext() = playbackController.skipToNext()
 
-    fun skipToPrevious() {
-        playbackController.skipToPrevious()
-    }
+    fun skipToPrevious() = playbackController.skipToPrevious()
 
-    /**
-     * Corta el stream por completo (equivalente a cerrar la sesión).
-     * El mini player se oculta hasta el próximo play real.
-     */
+    fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
+
     fun dismissAndStop() {
         viewModelScope.launch {
             playbackController.stopAndClear()

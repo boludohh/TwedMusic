@@ -48,21 +48,17 @@ import com.twedmusic.app.core.designsystem.theme.LocalCurrentTrackBorderColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 
-/** Altura del mini player (alineada a TrackRow). */
 private val MiniPlayerHeight = 64.dp
-
-/** Grosor de la barra de progreso (solo lectura, sin fondo). */
 private val ProgressStroke = 2.dp
-
-/** Umbral de arrastre hacia abajo para cortar el stream. */
 private val DismissDragThreshold = 80.dp
+private val ExpandDragThreshold = 80.dp
 
 /**
- * Contenido del mini player **dentro** del panel inferior unificado.
+ * Mini player dentro del panel unificado.
  *
- * No dibuja Surface ni esquinas propias: el contenedor con forma,
- * color y borde superior vive en [MainScreen]. Aquí solo van
- * carátula, textos, controles, progreso y el gesto de dismiss.
+ * - Tap en carátula/textos o swipe **arriba** → [onExpand] (Now Playing).
+ * - Swipe **abajo** → [onDismiss] (corta el stream).
+ * - Botones prev / play-pause / next no abren Now Playing.
  */
 @Composable
 fun MiniPlayer(
@@ -71,6 +67,7 @@ fun MiniPlayer(
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
     onDismiss: () -> Unit,
+    onExpand: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val titleColor = LocalListItemTitleColor.current
@@ -81,8 +78,10 @@ fun MiniPlayer(
     val density = LocalDensity.current
     val thumbnailPx = with(density) { 52.dp.roundToPx() }
     val dismissThresholdPx = with(density) { DismissDragThreshold.toPx() }
+    val expandThresholdPx = with(density) { ExpandDragThreshold.toPx() }
 
     var dragAccum by remember { mutableFloatStateOf(0f) }
+    val infoInteraction = remember { MutableInteractionSource() }
 
     Box(
         modifier = modifier
@@ -91,13 +90,12 @@ fun MiniPlayer(
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onVerticalDrag = { _, dragAmount ->
-                        if (dragAmount > 0f) {
-                            dragAccum += dragAmount
-                        }
+                        dragAccum += dragAmount
                     },
                     onDragEnd = {
-                        if (dragAccum >= dismissThresholdPx) {
-                            onDismiss()
+                        when {
+                            dragAccum >= dismissThresholdPx -> onDismiss()
+                            dragAccum <= -expandThresholdPx -> onExpand()
                         }
                         dragAccum = 0f
                     },
@@ -123,60 +121,73 @@ fun MiniPlayer(
                 .padding(end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .padding(start = 24.dp, top = 6.dp, bottom = 6.dp)
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(placeholderBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_music_note_filled),
-                    contentDescription = null,
-                    tint = placeholderIconColor,
-                    modifier = Modifier.size(26.dp)
-                )
-                val cover = state.coverFile
-                if (cover != null) {
-                    val request = ImageRequest.Builder(LocalContext.current)
-                        .data(cover)
-                        .size(CoilSize(thumbnailPx, thumbnailPx))
-                        .build()
-                    AsyncImage(
-                        model = request,
-                        contentDescription = state.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().fillMaxHeight()
-                    )
-                }
-            }
-
-            Column(
+            // Zona táctil de info → expand
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
-            ) {
-                Text(
-                    text = state.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = titleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = state.artist,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 13.sp,
-                        lineHeight = 16.sp
+                    .fillMaxHeight()
+                    .clickable(
+                        interactionSource = infoInteraction,
+                        indication = null,
+                        onClick = onExpand
                     ),
-                    color = subtitleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 24.dp, top = 6.dp, bottom = 6.dp)
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(placeholderBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_music_note_filled),
+                        contentDescription = null,
+                        tint = placeholderIconColor,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    val cover = state.coverFile
+                    if (cover != null) {
+                        val request = ImageRequest.Builder(LocalContext.current)
+                            .data(cover)
+                            .size(CoilSize(thumbnailPx, thumbnailPx))
+                            .build()
+                        AsyncImage(
+                            model = request,
+                            contentDescription = state.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight()
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
+                ) {
+                    Text(
+                        text = state.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = state.artist,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 16.sp
+                        ),
+                        color = subtitleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             MiniPlayerIconButton(

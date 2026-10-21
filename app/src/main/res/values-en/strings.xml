@@ -90,4 +90,8 @@
     <string name="cd_pause">Pause</string>
     <string name="cd_skip_next">Next</string>
     <string name="cd_skip_previous">Previous</string>
+    <string name="cd_shuffle">Shuffle</string>
+    <string name="cd_repeat">Repeat</string>
+    <string name="cd_queue">Queue</string>
+    <string name="cd_favorite">Favorite</string>
 </resources>
