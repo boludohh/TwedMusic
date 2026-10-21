@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.twedmusic.app.core.data.repository.CoverRepository
 import com.twedmusic.app.core.database.AppDatabase
 import com.twedmusic.app.feature.playback.PlaybackController
+import com.twedmusic.app.feature.playback.QueueEntry
+import com.twedmusic.app.feature.playback.RepeatMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
@@ -24,7 +26,11 @@ data class PlayerUiState(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
-    val progress: Float = 0f
+    val progress: Float = 0f,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.OFF,
+    val queue: List<QueueEntry> = emptyList(),
+    val currentMediaId: String? = null
 )
 
 @HiltViewModel
@@ -51,8 +57,21 @@ class PlayerViewModel @Inject constructor(
         playbackController.isPlaying,
         playbackController.currentPositionMs,
         playbackController.durationMs,
-        currentSongInfo
-    ) { mediaId, isPlaying, positionMs, durationMs, songInfo ->
+        currentSongInfo,
+        playbackController.shuffleEnabled,
+        playbackController.repeatMode,
+        playbackController.queue
+    ) { values ->
+        @Suppress("UNCHECKED_CAST")
+        val mediaId = values[0] as String?
+        val isPlaying = values[1] as Boolean
+        val positionMs = values[2] as Long
+        val durationMs = values[3] as Long
+        val songInfo = values[4] as Triple<String, String, String>?
+        val shuffle = values[5] as Boolean
+        val repeat = values[6] as RepeatMode
+        val queue = values[7] as List<QueueEntry>
+
         val progress = if (durationMs > 0L) {
             (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
         } else {
@@ -67,7 +86,11 @@ class PlayerViewModel @Inject constructor(
             isPlaying = isPlaying,
             positionMs = positionMs,
             durationMs = durationMs,
-            progress = progress
+            progress = progress,
+            shuffleEnabled = shuffle,
+            repeatMode = repeat,
+            queue = queue,
+            currentMediaId = mediaId
         )
     }.stateIn(
         scope = viewModelScope,
@@ -82,6 +105,12 @@ class PlayerViewModel @Inject constructor(
     fun skipToPrevious() = playbackController.skipToPrevious()
 
     fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
+
+    fun toggleShuffle() = playbackController.toggleShuffle()
+
+    fun cycleRepeatMode() = playbackController.cycleRepeatMode()
+
+    fun skipToQueueIndex(index: Int) = playbackController.skipToQueueIndex(index)
 
     fun dismissAndStop() {
         viewModelScope.launch {

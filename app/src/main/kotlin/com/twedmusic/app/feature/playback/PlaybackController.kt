@@ -10,6 +10,9 @@ import androidx.media3.session.SessionToken
 import com.twedmusic.app.core.data.repository.CoverRepository
 import com.twedmusic.app.core.model.Song
 import com.twedmusic.app.feature.playback.service.PlaybackService
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,35 +24,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
+
+/** Modo de repetición de la cola / pista actual. */
+enum class RepeatMode {
+    /** Reproduce la cola y para en la última pista. */
+    OFF,
+    /** Reproduce la cola en bucle (vuelve a la primera). */
+    ALL,
+    /** Repite solo la pista actual. */
+    ONE
+}
+
+/** Entrada de la cola de reproducción actual. */
+data class QueueEntry(
+    val mediaId: String,
+    val title: String,
+    val artist: String
+)
 
 /**
  * Controller centralizado de reproducción para toda la app.
  *
- * Gestiona la conexión/desconexión de [MediaController] con
- * [PlaybackService] y expone una API simple para controlar la
- * reproducción desde cualquier pantalla.
- *
- * \## Ventajas sobre MediaController local en cada pantalla
- * - **Una sola conexión**: evita que cada pantalla cree su propio
- *   MediaController (ahorra recursos y simplifica el ciclo de vida).
- * - **Flows reactivos compartidos**: `currentMediaId`, `isPlaying`,
- *   `currentPositionMs` y `durationMs` se actualizan en tiempo real
- *   y son consumidos por todas las pantallas (indicadores de pista
- *   actual, mini player, etc.).
- * - **API simple**: `playSong(song, queueId, queueSongs)` construye
- *   la cola, busca el índice y llama a `setMediaItems` + `play`.
- * - **Thread-safe**: todos los Flows son StateFlow con emisión en Main.
- *
- * \## Conexión automática
- * El controller se conecta a PlaybackService al primer uso (lazy
- * connection). Si la conexión falla, los métodos de control no hacen
- * nada (degradación elegante). Las órdenes de reproducción emitidas
- * mientras la conexión está en curso se encolan y se ejecutan en
- * cuanto el MediaController queda listo (evita el fallo de la primera
- * reproducción tras un arranque en frío).
+ * Gestiona MediaController ↔ PlaybackService y expone Flows + API
+ * de control (play, seek, shuffle, repeat, cola).
  */
 @Singleton
 class PlaybackController @Inject constructor(
@@ -58,45 +55,35 @@ class PlaybackController @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /** MediaController conectado a PlaybackService; null si aún no conectado. */
     private var mediaController: MediaController? = null
-
-    /** true mientras se está construyendo el MediaController de forma asíncrona. */
     private var isConnecting: Boolean = false
-
-    /**
-     * Acción de reproducción pendiente de ejecutar en cuanto el
-     * MediaController esté listo. Solo se guarda la última orden
-     * (la más reciente del usuario).
-     */
     private var pendingPlay: (() -> Unit)? = null
-
-    /** Job del polling de posición (\~16 ms) mientras suena. */
     private var positionJob: Job? = null
 
-    // =========================================================================
-    // Flows reactivos (consumidos por UI)
-    // =========================================================================
+    // ── Flows de UI ──────────────────────────────────────────────────────────
 
-    /** mediaId de la pista actualmente en reproducción (null si no hay nada sonando). */
     private val _currentMediaId = MutableStateFlow<String?>(null)
     val currentMediaId: StateFlow<String?> = _currentMediaId.asStateFlow()
 
-    /** true si el reproductor está en estado de reproducción activa. */
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    /** Posición actual de reproducción en milisegundos. */
     private val _currentPositionMs = MutableStateFlow(0L)
     val currentPositionMs: StateFlow<Long> = _currentPositionMs.asStateFlow()
 
-    /** Duración total de la pista actual en milisegundos. */
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
-    // =========================================================================
-    // Listener del player (actualiza Flows)
-    // =========================================================================
+    private val _repeatMode = MutableStateFlow(RepeatMode.OFF)
+    val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
+
+    private val _shuffleEnabled = MutableStateFlow(false)
+    val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
+
+    private val _queue = MutableStateFlow<List<QueueEntry>>(emptyList())
+    val queue: StateFlow<List<QueueEntry>> = _queue.asStateFlow()
+
+    // ── Listener ─────────────────────────────────────────────────────────────
 
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -110,6 +97,7 @@ class PlaybackController @Inject constructor(
                     item.mediaMetadata.extras?.getLong("duration", 0L) ?: 0L
                 }
             }
+            mediaController?.let { refreshQueue(it) }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -118,7 +106,6 @@ class PlaybackController @Inject constructor(
                 startPositionTicker()
             } else {
                 stopPositionTicker()
-                // Última lectura al pausar
                 mediaController?.let { ctrl ->
                     _currentPositionMs.value = ctrl.currentPosition.coerceAtLeast(0L)
                     if (ctrl.duration > 0) _durationMs.value = ctrl.duration
@@ -133,6 +120,7 @@ class PlaybackController @Inject constructor(
                     _isPlaying.value = false
                     _currentPositionMs.value = 0L
                     _durationMs.value = 0L
+                    _queue.value = emptyList()
                     stopPositionTicker()
                 }
                 Player.STATE_READY, Player.STATE_BUFFERING -> {
@@ -143,11 +131,17 @@ class PlaybackController @Inject constructor(
                 }
             }
         }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            _repeatMode.value = media3ToRepeatMode(repeatMode)
+        }
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            _shuffleEnabled.value = shuffleModeEnabled
+        }
     }
 
-    // =========================================================================
-    // Polling de posición (\~16 ms)
-    // =========================================================================
+    // ── Posición ─────────────────────────────────────────────────────────────
 
     private fun startPositionTicker() {
         if (positionJob?.isActive == true) return
@@ -167,16 +161,8 @@ class PlaybackController @Inject constructor(
         positionJob = null
     }
 
-    // =========================================================================
-    // Conexión a PlaybackService
-    // =========================================================================
+    // ── Conexión ─────────────────────────────────────────────────────────────
 
-    /**
-     * Conecta el MediaController a PlaybackService si aún no está
-     * conectado. Seguro para llamar múltiples veces (idempotente).
-     * Cuando la conexión termina con éxito, ejecuta la acción
-     * pendiente de reproducción si existe.
-     */
     private fun ensureConnected() {
         if (mediaController != null || isConnecting) return
 
@@ -196,6 +182,9 @@ class PlaybackController @Inject constructor(
                     _isPlaying.value = ctrl.isPlaying
                     _currentPositionMs.value = ctrl.currentPosition
                     _durationMs.value = ctrl.duration
+                    _repeatMode.value = media3ToRepeatMode(ctrl.repeatMode)
+                    _shuffleEnabled.value = ctrl.shuffleModeEnabled
+                    refreshQueue(ctrl)
                     if (ctrl.isPlaying) startPositionTicker()
 
                     val action = pendingPlay
@@ -206,19 +195,31 @@ class PlaybackController @Inject constructor(
         }, ContextCompat.getMainExecutor(context))
     }
 
-    // =========================================================================
-    // API pública: control de reproducción
-    // =========================================================================
+    // ── Cola ─────────────────────────────────────────────────────────────────
 
-    /**
-     * Reproduce [song] en el contexto de [queueId], construyendo la
-     * cola completa con [queueSongs] y saltando directamente a la
-     * canción objetivo.
-     *
-     * Si el MediaController aún no está conectado (arranque en frío),
-     * la orden se encola y se ejecuta automáticamente en cuanto la
-     * conexión termina.
-     */
+    private fun refreshQueue(ctrl: MediaController) {
+        val count = ctrl.mediaItemCount
+        if (count <= 0) {
+            _queue.value = emptyList()
+            return
+        }
+        val entries = ArrayList<QueueEntry>(count)
+        for (i in 0 until count) {
+            val item = ctrl.getMediaItemAt(i)
+            val meta = item.mediaMetadata
+            entries.add(
+                QueueEntry(
+                    mediaId = item.mediaId,
+                    title = meta.title?.toString().orEmpty(),
+                    artist = meta.artist?.toString().orEmpty()
+                )
+            )
+        }
+        _queue.value = entries
+    }
+
+    // ── API pública ──────────────────────────────────────────────────────────
+
     fun playSong(song: Song, queueId: String, queueSongs: List<Song>) {
         val playAction: () -> Unit = playAction@{
             val ctrl = mediaController ?: return@playAction
@@ -242,9 +243,16 @@ class PlaybackController @Inject constructor(
                     }
                 }
 
+                // Conservar modos actuales al cargar nueva cola
+                val keepRepeat = ctrl.repeatMode
+                val keepShuffle = ctrl.shuffleModeEnabled
+
                 ctrl.setMediaItems(mediaItems, startIndex, 0L)
+                ctrl.repeatMode = keepRepeat
+                ctrl.shuffleModeEnabled = keepShuffle
                 ctrl.prepare()
                 ctrl.play()
+                refreshQueue(ctrl)
             }
         }
 
@@ -256,45 +264,65 @@ class PlaybackController @Inject constructor(
         }
     }
 
-    /** Pausa la reproducción actual. */
     fun pause() {
         mediaController?.pause()
     }
 
-    /** Reanuda la reproducción actual. */
     fun resume() {
         mediaController?.play()
     }
 
-    /** Alterna entre pausa y reproducción. */
     fun togglePlayPause() {
         val ctrl = mediaController ?: return
         if (ctrl.isPlaying) pause() else resume()
     }
 
-    /**
-     * Salta a una posición específica en la pista actual.
-     * @param positionMs Posición en milisegundos desde el inicio.
-     */
     fun seekTo(positionMs: Long) {
         mediaController?.seekTo(positionMs)
     }
 
-    /** Pista siguiente en la cola actual. */
     fun skipToNext() {
         mediaController?.seekToNextMediaItem()
     }
 
-    /** Pista anterior en la cola actual. */
     fun skipToPrevious() {
         mediaController?.seekToPreviousMediaItem()
     }
 
+    /** Salta a la pista en [index] de la cola actual (0-based). */
+    fun skipToQueueIndex(index: Int) {
+        val ctrl = mediaController ?: return
+        if (index in 0 until ctrl.mediaItemCount) {
+            ctrl.seekTo(index, 0L)
+        }
+    }
+
     /**
-     * Detiene la reproducción y vacía la cola, como si se hubiera
-     * cerrado la app por completo. El mini player se oculta hasta
-     * el próximo [playSong] real.
+     * Ciclo: OFF → ALL → ONE → OFF.
+     *
+     * - OFF: la cola se reproduce y para al final.
+     * - ALL: la cola se repite en bucle.
+     * - ONE: solo la pista actual se repite.
      */
+    fun cycleRepeatMode() {
+        val ctrl = mediaController ?: return
+        val next = when (_repeatMode.value) {
+            RepeatMode.OFF -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+        }
+        ctrl.repeatMode = repeatModeToMedia3(next)
+        _repeatMode.value = next
+    }
+
+    /** Activa / desactiva el modo aleatorio de la cola. */
+    fun toggleShuffle() {
+        val ctrl = mediaController ?: return
+        val next = !_shuffleEnabled.value
+        ctrl.shuffleModeEnabled = next
+        _shuffleEnabled.value = next
+    }
+
     fun stopAndClear() {
         stopPositionTicker()
         mediaController?.let { ctrl ->
@@ -305,9 +333,10 @@ class PlaybackController @Inject constructor(
         _isPlaying.value = false
         _currentPositionMs.value = 0L
         _durationMs.value = 0L
+        _queue.value = emptyList()
+        // No reseteamos shuffle/repeat: se conservan entre sesiones de cola
     }
 
-    /** Libera el MediaController. Llamar desde onDestroy de la Application. */
     fun release() {
         stopPositionTicker()
         pendingPlay = null
@@ -315,6 +344,18 @@ class PlaybackController @Inject constructor(
         mediaController?.removeListener(playerListener)
         mediaController?.release()
         mediaController = null
+    }
+
+    private fun media3ToRepeatMode(mode: Int): RepeatMode = when (mode) {
+        Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+        Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+        else -> RepeatMode.OFF
+    }
+
+    private fun repeatModeToMedia3(mode: RepeatMode): Int = when (mode) {
+        RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+        RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
     }
 
     private companion object {

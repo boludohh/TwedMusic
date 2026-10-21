@@ -247,6 +247,9 @@ fun MainScreen(
                         onSkipPrevious = playerViewModel::skipToPrevious,
                         onSkipNext = playerViewModel::skipToNext,
                         onSeek = playerViewModel::seekTo,
+                        onToggleShuffle = playerViewModel::toggleShuffle,
+                        onCycleRepeat = playerViewModel::cycleRepeatMode,
+                        onSkipToQueueIndex = playerViewModel::skipToQueueIndex,
                         expandProgress = expandFraction,
                         modifier = Modifier
                             .fillMaxSize()

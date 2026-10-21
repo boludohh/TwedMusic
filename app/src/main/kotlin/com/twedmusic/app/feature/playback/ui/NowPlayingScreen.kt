@@ -19,12 +19,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -34,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -41,19 +47,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Size as CoilSize
 import com.twedmusic.app.R
 import com.twedmusic.app.core.designsystem.theme.LocalCardL2Color
 import com.twedmusic.app.core.designsystem.theme.LocalCoverPlaceholderIconColor
+import com.twedmusic.app.core.designsystem.theme.LocalCurrentTrackBorderColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemMetaColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
+import com.twedmusic.app.feature.playback.RepeatMode
 
 private val CloseDragThreshold = 100.dp
 private val CoverMini = 52.dp
@@ -62,9 +72,9 @@ private val CoverFull = 280.dp
 /**
  * Contenido de Now Playing **dentro** del panel que se estira.
  *
- * [expandProgress] 0→1 controla el tamaño de la carátula (del mini al grande).
- * Play/pause: iconos circle. Cierre: back o swipe down → [onClose].
+ * Shuffle / repeat (3 estados) / cola conectados al [PlayerUiState].
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
     state: PlayerUiState,
@@ -73,6 +83,9 @@ fun NowPlayingScreen(
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
     onSeek: (Long) -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onSkipToQueueIndex: (Int) -> Unit,
     expandProgress: Float = 1f,
     modifier: Modifier = Modifier
 ) {
@@ -81,6 +94,7 @@ fun NowPlayingScreen(
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val metaColor = LocalListItemMetaColor.current
+    val accentColor = LocalCurrentTrackBorderColor.current
     val placeholderBg = LocalCardL2Color.current
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
     val density = LocalDensity.current
@@ -93,6 +107,7 @@ fun NowPlayingScreen(
     var dragAccum by remember { mutableFloatStateOf(0f) }
     var scrubbing by remember { mutableStateOf(false) }
     var scrubProgress by remember { mutableFloatStateOf(0f) }
+    var showQueue by remember { mutableStateOf(false) }
 
     val displayProgress = if (scrubbing) scrubProgress else state.progress
 
@@ -132,7 +147,6 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Carátula: crece con el panel (foco visual de la animación)
             Box(
                 modifier = Modifier
                     .size(coverSize)
@@ -247,7 +261,9 @@ fun NowPlayingScreen(
                         iconRes = R.drawable.ic_shuffle,
                         contentDescription = stringResource(R.string.cd_shuffle),
                         size = 28.dp,
-                        onClick = { }
+                        active = state.shuffleEnabled,
+                        activeColor = accentColor,
+                        onClick = onToggleShuffle
                     )
                     NowPlayingIconButton(
                         iconRes = R.drawable.ic_skip_previous_filled,
@@ -273,11 +289,12 @@ fun NowPlayingScreen(
                         size = 36.dp,
                         onClick = onSkipNext
                     )
-                    NowPlayingIconButton(
-                        iconRes = R.drawable.ic_repeat,
-                        contentDescription = stringResource(R.string.cd_repeat),
-                        size = 28.dp,
-                        onClick = { }
+                    // Repeat: OFF = apagado · ALL = brillante · ONE = brillante + "1"
+                    NowPlayingRepeatButton(
+                        repeatMode = state.repeatMode,
+                        inactiveColor = titleColor,
+                        activeColor = accentColor,
+                        onClick = onCycleRepeat
                     )
                 }
             }
@@ -297,15 +314,116 @@ fun NowPlayingScreen(
                     iconRes = R.drawable.ic_queue_music,
                     contentDescription = stringResource(R.string.cd_queue),
                     size = 26.dp,
-                    onClick = { }
+                    onClick = { showQueue = true }
                 )
                 NowPlayingIconButton(
                     iconRes = R.drawable.ic_favorite_outline,
                     contentDescription = stringResource(R.string.cd_favorite),
                     size = 26.dp,
-                    onClick = { }
+                    onClick = { /* favoritos: siguiente fase */ }
                 )
             }
+        }
+    }
+
+    if (showQueue) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showQueue = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Text(
+                text = stringResource(R.string.cd_queue),
+                style = MaterialTheme.typography.titleMedium,
+                color = titleColor,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+            ) {
+                itemsIndexed(
+                    items = state.queue,
+                    key = { index, entry -> "${entry.mediaId}_$index" }
+                ) { index, entry ->
+                    val isCurrent = entry.mediaId == state.currentMediaId
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSkipToQueueIndex(index)
+                                showQueue = false
+                            }
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = entry.title.ifEmpty { "—" },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isCurrent) accentColor else titleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                            if (entry.artist.isNotEmpty()) {
+                                Text(
+                                    text = entry.artist,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontSize = 13.sp
+                                    ),
+                                    color = subtitleColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NowPlayingRepeatButton(
+    repeatMode: RepeatMode,
+    inactiveColor: Color,
+    activeColor: Color,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val active = repeatMode != RepeatMode.OFF
+    val tint = if (active) activeColor else inactiveColor
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_repeat),
+            contentDescription = stringResource(R.string.cd_repeat),
+            tint = tint,
+            modifier = Modifier.size(28.dp)
+        )
+        if (repeatMode == RepeatMode.ONE) {
+            Text(
+                text = "1",
+                color = activeColor,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 4.dp, bottom = 4.dp)
+            )
         }
     }
 }
@@ -315,10 +433,13 @@ private fun NowPlayingIconButton(
     iconRes: Int,
     contentDescription: String,
     size: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    active: Boolean = false,
+    activeColor: Color = Color.Unspecified
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val tint = LocalListItemTitleColor.current
+    val defaultTint = LocalListItemTitleColor.current
+    val tint = if (active && activeColor != Color.Unspecified) activeColor else defaultTint
     Box(
         modifier = Modifier
             .size(size + 16.dp)
