@@ -10,6 +10,7 @@ import com.twedmusic.app.feature.playback.RepeatMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class PlayerUiState(
     val isVisible: Boolean = false,
@@ -33,6 +35,17 @@ data class PlayerUiState(
     val currentMediaId: String? = null
 )
 
+/**
+ * Título, artista y portada de la pista actual. Se resuelve una sola
+ * vez por cambio de canción (ver [currentSongInfo]), nunca en cada
+ * tick de posición.
+ */
+private data class SongInfo(
+    val title: String,
+    val artist: String,
+    val coverFile: File?
+)
+
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val playbackController: PlaybackController,
@@ -42,11 +55,26 @@ class PlayerViewModel @Inject constructor(
 
     private val songDao = database.songDao()
 
+    /**
+     * Título, artista y portada de la pista actual.
+     *
+     * Depende únicamente de [PlaybackController.currentMediaId], por lo
+     * que solo se recalcula cuando cambia la canción (no en cada tick
+     * de posición, que ocurre varias veces por segundo mientras suena
+     * música). La consulta a Room y la resolución de la portada
+     * ([CoverRepository.coverFile], que hace I/O de disco) se ejecutan
+     * en `Dispatchers.IO`.
+     */
     private val currentSongInfo = playbackController.currentMediaId
         .mapLatest { mediaId ->
             val id = mediaId?.toLongOrNull() ?: return@mapLatest null
-            songDao.getById(id)?.let { entity ->
-                Triple(entity.title, entity.artist, entity.path)
+            withContext(Dispatchers.IO) {
+                val entity = songDao.getById(id) ?: return@withContext null
+                SongInfo(
+                    title = entity.title,
+                    artist = entity.artist,
+                    coverFile = coverRepository.coverFile(entity.path)
+                )
             }
         }
         .distinctUntilChanged()
@@ -67,7 +95,7 @@ class PlayerViewModel @Inject constructor(
         val isPlaying = values[1] as Boolean
         val positionMs = values[2] as Long
         val durationMs = values[3] as Long
-        val songInfo = values[4] as Triple<String, String, String>?
+        val songInfo = values[4] as SongInfo?
         val shuffle = values[5] as Boolean
         val repeat = values[6] as RepeatMode
         val queue = values[7] as List<QueueEntry>
@@ -77,12 +105,12 @@ class PlayerViewModel @Inject constructor(
         } else {
             0f
         }
-        val path = songInfo?.third
+        // songInfo ya trae el coverFile resuelto: nada de I/O aquí.
         PlayerUiState(
             isVisible = mediaId != null,
-            title = songInfo?.first.orEmpty(),
-            artist = songInfo?.second.orEmpty(),
-            coverFile = path?.let { coverRepository.coverFile(it) },
+            title = songInfo?.title.orEmpty(),
+            artist = songInfo?.artist.orEmpty(),
+            coverFile = songInfo?.coverFile,
             isPlaying = isPlaying,
             positionMs = positionMs,
             durationMs = durationMs,

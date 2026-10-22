@@ -359,6 +359,17 @@ class PlaybackController @Inject constructor(
     }
 
     private companion object {
-        const val POSITION_TICK_MS = 16L
+        /**
+         * Intervalo del ticker de posición que alimenta la UI (barra de
+         * progreso del mini player y de Now Playing).
+         *
+         * 200 ms (5 actualizaciones/segundo) es más que suficiente para
+         * que una barra de progreso se vea fluida; no hace falta más
+         * que eso. Antes estaba en 16 ms (~60/segundo): cada tick
+         * recombina el [uiState] de [PlayerViewModel], así que un
+         * intervalo tan corto multiplicaba por ~12 el trabajo
+         * innecesario mientras suena música, sin ninguna mejora visual.
+         */
+        const val POSITION_TICK_MS = 200L
     }
 }

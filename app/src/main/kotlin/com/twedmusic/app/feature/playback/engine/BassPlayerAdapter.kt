@@ -141,6 +141,16 @@ class BassPlayerAdapter(
      */
     private var currentPlayWhenReady: Boolean = false
 
+    /**
+     * Modo de repetición actual ([Player.REPEAT_MODE_OFF],
+     * [Player.REPEAT_MODE_ALL] o [Player.REPEAT_MODE_ONE]). Solo lo
+     * modifica [handleSetRepeatMode]; lo usa [resolveNextIndex] para
+     * decidir qué pista sigue al terminar la actual. No se resetea en
+     * stop/release: se conserva entre colas, igual que hace
+     * PlaybackController al llamar a setMediaItems().
+     */
+    private var currentRepeatMode: Int = Player.REPEAT_MODE_OFF
+
     /** Playlist actual (lista de MediaItem). */
     private var currentPlaylist: List<MediaItem> = emptyList()
 
@@ -273,6 +283,7 @@ class BassPlayerAdapter(
             .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
             .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
             .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .add(Player.COMMAND_SET_REPEAT_MODE)
             .build()
 
         val mediaItemDatas = currentPlaylist.mapIndexed { index, mediaItem ->
@@ -288,6 +299,7 @@ class BassPlayerAdapter(
             )
             .setPlaylist(mediaItemDatas)
             .setCurrentMediaItemIndex(currentIndex)
+            .setRepeatMode(currentRepeatMode)
             .setContentPositionMs(currentPositionMs)
             .build()
     }
@@ -544,6 +556,17 @@ class BassPlayerAdapter(
         } else {
             pauseInternal()
         }
+        invalidateState()
+        return Futures.immediateVoidFuture()
+    }
+
+    /**
+     * Fija el modo de repetición. [resolveNextIndex] lo usa al terminar
+     * cada pista para decidir si repetir la misma (ONE), volver al
+     * principio de la cola (ALL) o detenerse (OFF).
+     */
+    override fun handleSetRepeatMode(repeatMode: Int): ListenableFuture<*> {
+        currentRepeatMode = repeatMode
         invalidateState()
         return Futures.immediateVoidFuture()
     }
@@ -813,14 +836,39 @@ class BassPlayerAdapter(
     }
 
     /**
+     * Calcula el índice que debe sonar después de [fromIndex] según
+     * [currentRepeatMode]. Devuelve `null` si no hay siguiente pista
+     * (fin de la cola con repeat OFF).
+     *
+     * - [Player.REPEAT_MODE_ONE]: repite la misma pista.
+     * - [Player.REPEAT_MODE_ALL]: avanza y, al llegar al final,
+     *   vuelve al índice 0.
+     * - [Player.REPEAT_MODE_OFF]: avanza; al llegar al final, `null`.
+     *
+     * No tiene en cuenta el shuffle: hoy el adapter siempre recorre
+     * la cola en orden secuencial, shuffle esté o no activado.
+     */
+    private fun resolveNextIndex(fromIndex: Int): Int? {
+        if (currentPlaylist.isEmpty()) return null
+        return when (currentRepeatMode) {
+            Player.REPEAT_MODE_ONE -> fromIndex
+            Player.REPEAT_MODE_ALL -> {
+                val next = fromIndex + 1
+                if (next < currentPlaylist.size) next else 0
+            }
+            else -> {
+                val next = fromIndex + 1
+                if (next < currentPlaylist.size) next else null
+            }
+        }
+    }
+
+    /**
      * Programa la siguiente pista para gapless puro, justo a tiempo.
      */
     private fun scheduleNextGapless(remainingMs: Long) {
         nextScheduled = true
-        val nextIndex = currentIndex + 1
-        if (nextIndex >= currentPlaylist.size) {
-            return
-        }
+        val nextIndex = resolveNextIndex(currentIndex) ?: return
 
         val nextPath = currentPlaylist[nextIndex].localConfiguration?.uri?.path
         if (nextPath.isNullOrEmpty()) {
@@ -986,10 +1034,10 @@ class BassPlayerAdapter(
      * termina el actual.
      */
     private fun onTrackEnded() {
-        val nextIndex = currentIndex + 1
-        Log.d(DEBUG_TAG, "onTrackEnded: currentIndex=$currentIndex | nextIndex=$nextIndex | playlistSize=${currentPlaylist.size} | queueId=$currentQueueId")
+        val nextIndex = resolveNextIndex(currentIndex)
+        Log.d(DEBUG_TAG, "onTrackEnded: currentIndex=$currentIndex | nextIndex=$nextIndex | repeatMode=$currentRepeatMode | playlistSize=${currentPlaylist.size} | queueId=$currentQueueId")
 
-        if (nextIndex < currentPlaylist.size) {
+        if (nextIndex != null) {
             currentIndex = nextIndex
 
             if (nextHandle != 0) {
