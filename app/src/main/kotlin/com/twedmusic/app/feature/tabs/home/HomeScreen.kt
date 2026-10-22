@@ -7,45 +7,29 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.size.Size
 import com.twedmusic.app.R
-import com.twedmusic.app.core.database.TotalStats
-import com.twedmusic.app.core.designsystem.theme.LocalCardL2Color
-import com.twedmusic.app.core.designsystem.theme.LocalCoverPlaceholderIconColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
+import com.twedmusic.app.core.model.Album
 import com.twedmusic.app.core.model.Song
+import com.twedmusic.app.feature.tabs.albums.components.AlbumCard
 import com.twedmusic.app.feature.tabs.home.components.HomeArtistCard
 import com.twedmusic.app.feature.tabs.home.components.HomeRecentTrackRow
 import com.twedmusic.app.feature.tabs.home.components.HomeSectionHeader
@@ -59,7 +43,7 @@ import java.io.File
  * 2. Tu actividad (3 stats con iconos)
  * 3. Reproducidas recientemente (3 filas)
  * 4. Tus artistas (5 círculos, más recientes)
- * 5. Álbumes (4 cards, 2×2)
+ * 5. Álbumes (4 cards reales de AlbumsScreen, 2×2, 14.dp)
  *
  * Sin playlists, sin atribución Deezer, sin saludo / shuffle / resume.
  */
@@ -102,7 +86,6 @@ fun HomeScreen(
                 )
             }
 
-            // Tu actividad: siempre visible (0 si no hay datos)
             item(key = "stats") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
@@ -215,9 +198,14 @@ private fun ArtistsSection(
     }
 }
 
+/**
+ * Grid 2×2 con [AlbumCard] literal de AlbumsScreen.
+ * Spacing horizontal/vertical: 14.dp (igual que AlbumsScreen).
+ * Los 4 álbumes vienen ordenados por dateAdded en el ViewModel.
+ */
 @Composable
 private fun AlbumsGridSection(
-    albums: List<HomeAlbumData>,
+    albums: List<Album>,
     coverFileOf: (String) -> File?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -226,105 +214,32 @@ private fun AlbumsGridSection(
             showSeeAll = true,
             onSeeAllClick = { /* TODO: Álbumes */ }
         )
-        // 2 columnas × 2 filas (máx. 4)
         val rows = albums.chunked(2)
-        rows.forEach { rowAlbums ->
+        rows.forEachIndexed { index, rowAlbums ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 rowAlbums.forEach { album ->
-                    HomeAlbumGridCard(
+                    AlbumCard(
                         title = album.title,
                         artist = album.artist,
+                        year = album.year,
+                        trackCount = album.trackCount,
+                        isNew = album.isNew,
                         coverFile = album.coverPath?.let { coverFileOf(it) },
-                        modifier = Modifier.weight(1f),
-                        onClick = { /* TODO */ }
+                        onClick = { /* TODO: detalle álbum */ },
+                        modifier = Modifier.weight(1f)
                     )
                 }
                 if (rowAlbums.size == 1) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
             }
-            if (rowAlbums !== rows.last()) {
-                Spacer(modifier = Modifier.height(12.dp))
+            if (index < rows.lastIndex) {
+                Spacer(modifier = Modifier.height(14.dp))
             }
         }
-    }
-}
-
-/** Card de álbum a ancho de columna (estilo grid AlbumsScreen). */
-@Composable
-private fun HomeAlbumGridCard(
-    title: String,
-    artist: String,
-    coverFile: File?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val surfaceL2 = LocalCardL2Color.current
-    val titleColor = LocalListItemTitleColor.current
-    val subtitleColor = LocalListItemSubtitleColor.current
-    val placeholderIcon = LocalCoverPlaceholderIconColor.current
-    val density = LocalDensity.current
-
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(surfaceL2),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_album_filled),
-                contentDescription = null,
-                tint = placeholderIcon,
-                modifier = Modifier.size(40.dp)
-            )
-            if (coverFile != null) {
-                val sidePx = with(density) { 160.dp.roundToPx() }
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(coverFile)
-                        .size(Size(sidePx, sidePx))
-                        .build(),
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = titleColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = artist,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            ),
-            color = subtitleColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

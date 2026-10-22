@@ -7,10 +7,12 @@ import com.twedmusic.app.core.data.repository.AudioRepository
 import com.twedmusic.app.core.data.repository.CoverRepository
 import com.twedmusic.app.core.data.repository.PlaybackHistoryRepository
 import com.twedmusic.app.core.database.TotalStats
+import com.twedmusic.app.core.model.Album
 import com.twedmusic.app.core.model.Song
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.days
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,19 +20,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 
-data class HomeAlbumData(
-    val title: String,
-    val artist: String,
-    val coverPath: String?,
-    val dateAdded: Long
-)
-
 data class HomeUiState(
     val songCount: Int = 0,
     val totalStats: TotalStats = TotalStats(0, 0, 0L),
     val recentlyPlayed: List<Song> = emptyList(),
     val recentArtists: List<String> = emptyList(),
-    val recentAlbums: List<HomeAlbumData> = emptyList()
+    /** 4 álbumes más recientes por fecha de adición a la biblioteca. */
+    val recentAlbums: List<Album> = emptyList()
 )
 
 @HiltViewModel
@@ -69,10 +65,6 @@ class HomeViewModel @Inject constructor(
     }
 }
 
-/**
- * Artistas más recientes: primero los de reproducciones recientes,
- * luego el resto por fecha de adición de sus pistas.
- */
 private fun buildRecentArtists(
     songs: List<Song>,
     recentlyPlayed: List<Song>
@@ -86,26 +78,56 @@ private fun buildRecentArtists(
         .forEach { song ->
             song.artist.takeIf { it.isNotBlank() }?.let { ordered.add(it) }
         }
-    return ordered.take(5).toList()
+    return ordered.take(ARTISTS_LIMIT).toList()
 }
 
-/** Agrupa por álbum + artista; los más recientes primero (máx. 4). */
-private fun buildRecentAlbums(songs: List<Song>): List<HomeAlbumData> =
-    songs
-        .groupBy { song ->
-            val albumName = song.album?.takeIf { it.isNotBlank() }
-            val artistName = song.albumArtist?.takeIf { it.isNotBlank() }
-                ?: song.artist.takeIf { it.isNotBlank() }
-                ?: "Unknown Artist"
-            if (albumName != null) "$albumName|$artistName" else "|$artistName"
-        }
-        .map { (_, groupSongs) ->
+/**
+ * 4 álbumes más recientes por [Song.dateAdded] máximo del grupo
+ * (cuándo se agregó el álbum a la biblioteca), no por reproducción.
+ * Misma lógica de agrupación / campos que AlbumsScreen.
+ */
+private fun buildRecentAlbums(songs: List<Song>): List<Album> {
+    if (songs.isEmpty()) return emptyList()
+
+    val newThresholdMs =
+        System.currentTimeMillis() - NEW_ALBUM_THRESHOLD_DAYS.inWholeMilliseconds
+
+    return songs
+        .groupBy { albumKeyOf(it) }
+        .map { (key, groupSongs) ->
             val firstSong = groupSongs.first()
             val title = firstSong.album?.takeIf { it.isNotBlank() } ?: firstSong.artist
-            val artist = firstSong.albumArtist?.takeIf { it.isNotBlank() } ?: firstSong.artist
+            val artist = firstSong.albumArtist?.takeIf { it.isNotBlank() }
+                ?: firstSong.artist
+            val year = groupSongs.firstNotNullOfOrNull { it.year }
+            val trackCount = groupSongs.size
             val coverPath = groupSongs.firstOrNull { it.path.isNotBlank() }?.path
-            val dateAdded = groupSongs.maxOf { it.dateAdded }
-            HomeAlbumData(title, artist, coverPath, dateAdded)
+            val maxDateAdded = groupSongs.maxOfOrNull { it.dateAdded } ?: 0L
+            val isNew = maxDateAdded >= newThresholdMs
+            Album(
+                key = key,
+                title = title,
+                artist = artist,
+                year = year,
+                trackCount = trackCount,
+                coverPath = coverPath,
+                isNew = isNew
+            ) to maxDateAdded
         }
-        .sortedByDescending { it.dateAdded }
-        .take(4)
+        .sortedByDescending { it.second }
+        .take(ALBUMS_LIMIT)
+        .map { it.first }
+}
+
+private fun albumKeyOf(song: Song): String {
+    val albumName = song.album?.takeIf { it.isNotBlank() }
+    val artistName = song.albumArtist?.takeIf { it.isNotBlank() }
+        ?: song.artist.takeIf { it.isNotBlank() }
+        ?: "Unknown Artist"
+    return if (albumName != null) "$albumName|$artistName" else "|$artistName"
+}
+
+private val NEW_ALBUM_THRESHOLD_DAYS = 30.days
+
+private const val ARTISTS_LIMIT = 5
+private const val ALBUMS_LIMIT = 4
