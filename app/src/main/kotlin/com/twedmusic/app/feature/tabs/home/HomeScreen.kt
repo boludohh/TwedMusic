@@ -40,12 +40,10 @@ import java.io.File
  * Pantalla de inicio (boceto definitivo).
  *
  * 1. Título "Inicio"
- * 2. Tu actividad (3 stats con iconos)
- * 3. Reproducidas recientemente (3 filas)
- * 4. Tus artistas (5 círculos, más recientes)
- * 5. Álbumes (4 cards reales de AlbumsScreen, 2×2, 14.dp)
- *
- * Sin playlists, sin atribución Deezer, sin saludo / shuffle / resume.
+ * 2. Tu actividad (panel único)
+ * 3. Reproducidas recientemente (3)
+ * 4. Tus artistas (5 por dateAdded de biblioteca)
+ * 5. Álbumes (4 AlbumCard, grid 2×2, gap 14.dp H/V)
  */
 @Composable
 fun HomeScreen(
@@ -199,45 +197,50 @@ private fun ArtistsSection(
 }
 
 /**
- * Grid 2×2 con [AlbumCard] literal de AlbumsScreen.
- * Spacing horizontal/vertical: 14.dp (igual que AlbumsScreen).
- * Los 4 álbumes vienen ordenados por dateAdded en el ViewModel.
+ * Grid 2×2 con [AlbumCard] de AlbumsScreen.
+ *
+ * Importante: el gap vertical es SOLO [Arrangement.spacedBy] (14.dp)
+ * en el Column del grid. No mezclar spacedBy del padre + Spacer,
+ * porque se suman y el hueco queda \~26.dp.
  */
 @Composable
 private fun AlbumsGridSection(
     albums: List<Album>,
     coverFileOf: (String) -> File?
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column {
         HomeSectionHeader(
             title = stringResource(R.string.home_albums),
             showSeeAll = true,
             onSeeAllClick = { /* TODO: Álbumes */ }
         )
-        val rows = albums.chunked(2)
-        rows.forEachIndexed { index, rowAlbums ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                rowAlbums.forEach { album ->
-                    AlbumCard(
-                        title = album.title,
-                        artist = album.artist,
-                        year = album.year,
-                        trackCount = album.trackCount,
-                        isNew = album.isNew,
-                        coverFile = album.coverPath?.let { coverFileOf(it) },
-                        onClick = { /* TODO: detalle álbum */ },
-                        modifier = Modifier.weight(1f)
-                    )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Solo este spacedBy controla el gap entre filas (= AlbumsScreen)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            albums.chunked(2).forEach { rowAlbums ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    rowAlbums.forEach { album ->
+                        AlbumCard(
+                            title = album.title,
+                            artist = album.artist,
+                            year = album.year,
+                            trackCount = album.trackCount,
+                            isNew = album.isNew,
+                            coverFile = album.coverPath?.let { coverFileOf(it) },
+                            onClick = { /* TODO: detalle álbum */ },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (rowAlbums.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
-                if (rowAlbums.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-            if (index < rows.lastIndex) {
-                Spacer(modifier = Modifier.height(14.dp))
             }
         }
     }

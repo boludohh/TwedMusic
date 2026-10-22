@@ -24,8 +24,9 @@ data class HomeUiState(
     val songCount: Int = 0,
     val totalStats: TotalStats = TotalStats(0, 0, 0L),
     val recentlyPlayed: List<Song> = emptyList(),
+    /** 5 artistas más recientes por dateAdded de biblioteca (no por play). */
     val recentArtists: List<String> = emptyList(),
-    /** 4 álbumes más recientes por fecha de adición a la biblioteca. */
+    /** 4 álbumes más recientes por dateAdded de biblioteca. */
     val recentAlbums: List<Album> = emptyList()
 )
 
@@ -46,7 +47,7 @@ class HomeViewModel @Inject constructor(
             songCount = songs.size,
             totalStats = totalStats,
             recentlyPlayed = recentlyPlayed,
-            recentArtists = buildRecentArtists(songs, recentlyPlayed),
+            recentArtists = buildRecentArtists(songs),
             recentAlbums = buildRecentAlbums(songs)
         )
     }
@@ -65,32 +66,35 @@ class HomeViewModel @Inject constructor(
     }
 }
 
-private fun buildRecentArtists(
-    songs: List<Song>,
-    recentlyPlayed: List<Song>
-): List<String> {
-    val ordered = LinkedHashSet<String>()
-    recentlyPlayed.forEach { song ->
-        song.artist.takeIf { it.isNotBlank() }?.let { ordered.add(it) }
-    }
-    songs
-        .sortedByDescending { it.dateAdded }
-        .forEach { song ->
-            song.artist.takeIf { it.isNotBlank() }?.let { ordered.add(it) }
-        }
-    return ordered.take(ARTISTS_LIMIT).toList()
+/**
+ * 5 artistas cuyo material se agregó más recientemente a la biblioteca.
+ * Criterio: max(dateAdded) de las pistas de cada artista.
+ * [Song.dateAdded] está en segundos (MediaStore DATE_ADDED).
+ * No usa historial de reproducción.
+ */
+private fun buildRecentArtists(songs: List<Song>): List<String> {
+    if (songs.isEmpty()) return emptyList()
+    return songs
+        .asSequence()
+        .filter { it.artist.isNotBlank() }
+        .groupBy { it.artist }
+        .mapValues { (_, list) -> list.maxOf { it.dateAdded } }
+        .entries
+        .sortedByDescending { it.value }
+        .take(ARTISTS_LIMIT)
+        .map { it.key }
 }
 
 /**
- * 4 álbumes más recientes por [Song.dateAdded] máximo del grupo
- * (cuándo se agregó el álbum a la biblioteca), no por reproducción.
- * Misma lógica de agrupación / campos que AlbumsScreen.
+ * 4 álbumes más recientes por max(dateAdded) del grupo.
+ * dateAdded en segundos; isNew compara contra epoch en segundos.
  */
 private fun buildRecentAlbums(songs: List<Song>): List<Album> {
     if (songs.isEmpty()) return emptyList()
 
-    val newThresholdMs =
-        System.currentTimeMillis() - NEW_ALBUM_THRESHOLD_DAYS.inWholeMilliseconds
+    // dateAdded es epoch en SEGUNDOS → umbral también en segundos
+    val thresholdSec =
+        (System.currentTimeMillis() / 1000L) - NEW_ALBUM_THRESHOLD_DAYS.inWholeSeconds
 
     return songs
         .groupBy { albumKeyOf(it) }
@@ -103,7 +107,6 @@ private fun buildRecentAlbums(songs: List<Song>): List<Album> {
             val trackCount = groupSongs.size
             val coverPath = groupSongs.firstOrNull { it.path.isNotBlank() }?.path
             val maxDateAdded = groupSongs.maxOfOrNull { it.dateAdded } ?: 0L
-            val isNew = maxDateAdded >= newThresholdMs
             Album(
                 key = key,
                 title = title,
@@ -111,7 +114,7 @@ private fun buildRecentAlbums(songs: List<Song>): List<Album> {
                 year = year,
                 trackCount = trackCount,
                 coverPath = coverPath,
-                isNew = isNew
+                isNew = maxDateAdded >= thresholdSec
             ) to maxDateAdded
         }
         .sortedByDescending { it.second }
