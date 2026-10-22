@@ -8,75 +8,91 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.twedmusic.app.R
-// Familia de fuentes IBM Plex Sans (latín, cirílico, griego)
+
+/**
+ * IBM Plex Sans (latín / cirílico / griego).
+ *
+ * Mapeo de archivos → FontWeight:
+ * - regular  → Light   (textos muy pequeños)
+ * - text     → Normal  (cuerpo)
+ * - medium   → Medium  (subtítulos / labels)
+ * - semibold → SemiBold (títulos de sección)
+ * - bold     → Bold    (títulos de pantalla)
+ */
 val IBMPlexSansFamily = FontFamily(
+    Font(R.font.ibmplexsans_regular, FontWeight.Light),
     Font(R.font.ibmplexsans_text, FontWeight.Normal),
+    Font(R.font.ibmplexsans_medium, FontWeight.Medium),
+    Font(R.font.ibmplexsans_semibold, FontWeight.SemiBold),
     Font(R.font.ibmplexsans_bold, FontWeight.Bold)
 )
 
-// Familia de fuentes IBM Plex Sans Arabic (árabe)
+/** IBM Plex Sans Arabic (mismos grosores). */
 val IBMPlexSansArabicFamily = FontFamily(
+    Font(R.font.ibmplexsansarabic_regular, FontWeight.Light),
     Font(R.font.ibmplexsansarabic_text, FontWeight.Normal),
+    Font(R.font.ibmplexsansarabic_medium, FontWeight.Medium),
+    Font(R.font.ibmplexsansarabic_semibold, FontWeight.SemiBold),
     Font(R.font.ibmplexsansarabic_bold, FontWeight.Bold)
 )
 
 /**
- * Construye la tipografía Material 3 usando la familia de fuentes dada.
- * Se llama desde TwedMusicTheme con la familia provista por LocalAppFontFamily.
+ * Tipografía Material 3 con la familia indicada.
+ * Los estilos usan pesos que existen en [IBMPlexSansFamily].
  */
 fun buildTypography(family: FontFamily): Typography = Typography(
     displayLarge = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Bold,
         fontSize = 57.sp,
         lineHeight = 64.sp,
         letterSpacing = (-0.25).sp
     ),
     displayMedium = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Bold,
         fontSize = 45.sp,
         lineHeight = 52.sp,
         letterSpacing = 0.sp
     ),
     displaySmall = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 36.sp,
         lineHeight = 44.sp,
         letterSpacing = 0.sp
     ),
     headlineLarge = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
         letterSpacing = 0.sp
     ),
     headlineMedium = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
         letterSpacing = 0.sp
     ),
     headlineSmall = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
         letterSpacing = 0.sp
     ),
     titleLarge = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.15.sp
@@ -104,7 +120,7 @@ fun buildTypography(family: FontFamily): Typography = Typography(
     ),
     bodySmall = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Light,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.4.sp
@@ -125,22 +141,15 @@ fun buildTypography(family: FontFamily): Typography = Typography(
     ),
     labelSmall = TextStyle(
         fontFamily = family,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Light,
         fontSize = 11.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     )
 )
 
-// Tipografía por defecto (IBM Plex Sans para idiomas no árabes)
 val Typography = buildTypography(IBMPlexSansFamily)
 
-/**
- * Estilo para títulos de pantalla (Pistas, Álbumes, Artistas, etc.).
- * Usa IBM Plex Sans Bold, 36sp, para destacar visualmente el nombre de la pestaña.
- * Definido como función composable para leer LocalAppFontFamily y usar
- * la familia correcta según el idioma activo (IBM Plex Sans o Arabic).
- */
 @Composable
 fun screenTitle(): TextStyle = TextStyle(
     fontFamily = LocalAppFontFamily.current,

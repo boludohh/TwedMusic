@@ -16,17 +16,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.twedmusic.app.R
-import com.twedmusic.app.core.designsystem.theme.LocalFloatingIconColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
-/**
- * Header de sección para la pantalla Home.
- * Muestra un título a la izquierda y un botón "Ver todo" con chevron a la derecha.
- *
- * @param title Título de la sección (ej. "Escuchado recientemente").
- * @param showSeeAll Si debe mostrarse el botón "Ver todo". Por defecto true.
- * @param onSeeAllClick Callback cuando se toca "Ver todo".
- */
+
 @Composable
 fun HomeSectionHeader(
     title: String,
@@ -36,7 +28,6 @@ fun HomeSectionHeader(
 ) {
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
-    val iconColor = LocalFloatingIconColor.current
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -47,13 +38,12 @@ fun HomeSectionHeader(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = titleColor,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.SemiBold
         )
 
         if (showSeeAll && onSeeAllClick != null) {
             Row(
-                modifier = Modifier
-                    .clickable(onClick = onSeeAllClick),
+                modifier = Modifier.clickable(onClick = onSeeAllClick),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
@@ -61,13 +51,13 @@ fun HomeSectionHeader(
                     text = stringResource(R.string.home_see_all),
                     style = MaterialTheme.typography.labelMedium,
                     color = subtitleColor,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Medium
                 )
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_chevron_right),
+                    painter = painterResource(R.drawable.ic_chevron_right),
                     contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(14.dp)
+                    tint = subtitleColor,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

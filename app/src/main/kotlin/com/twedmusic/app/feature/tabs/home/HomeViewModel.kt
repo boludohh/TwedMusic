@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 
-/** Álbum reciente para la sección de álbumes de Home. */
 data class HomeAlbumData(
     val title: String,
     val artist: String,
@@ -26,32 +25,14 @@ data class HomeAlbumData(
     val dateAdded: Long
 )
 
-/** Estado completo de la pantalla de inicio. */
 data class HomeUiState(
-    /** Total de canciones de la biblioteca. */
     val songCount: Int = 0,
     val totalStats: TotalStats = TotalStats(0, 0, 0L),
-    /** Últimas canciones reproducidas (la primera alimenta "Seguir escuchando"). */
     val recentlyPlayed: List<Song> = emptyList(),
-    /** Últimas canciones agregadas a la biblioteca. */
-    val recentlyAdded: List<Song> = emptyList(),
-    /** Artistas únicos para la sección "Tus artistas". */
-    val uniqueArtists: List<String> = emptyList(),
-    /** Álbumes más recientes (agrupados por álbum + artista). */
+    val recentArtists: List<String> = emptyList(),
     val recentAlbums: List<HomeAlbumData> = emptyList()
 )
 
-/**
- * ViewModel de la pestaña Inicio.
- *
- * Combina la biblioteca y el historial de reproducción en un único
- * [HomeUiState]. Todo el cálculo (agrupar, ordenar, recortar) se hace
- * en un hilo de fondo y no en el composable.
- *
- * Las portadas y las imágenes de artista siguen consultándose por
- * archivo (con caché) desde la UI mediante [coverFile] y
- * [artistImageFile], igual que antes de introducir el ViewModel.
- */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     audioRepository: AudioRepository,
@@ -69,31 +50,46 @@ class HomeViewModel @Inject constructor(
             songCount = songs.size,
             totalStats = totalStats,
             recentlyPlayed = recentlyPlayed,
-            recentlyAdded = songs.sortedByDescending { it.dateAdded }.take(SECTION_LIMIT),
-            uniqueArtists = songs
-                .mapNotNull { it.artist.takeIf { name -> name.isNotBlank() } }
-                .distinct()
-                .take(SECTION_LIMIT),
+            recentArtists = buildRecentArtists(songs, recentlyPlayed),
             recentAlbums = buildRecentAlbums(songs)
         )
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeUiState())
 
-    /** Archivo de portada en disco (consulta con caché); `null` si no hay. */
     fun coverFile(path: String): File? = coverRepository.coverFile(path)
 
-    /** Imagen del artista en disco (consulta con caché); `null` si no hay. */
     fun artistImageFile(name: String): File? = artistImageRepository.artistImageFile(name)
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
-        const val RECENTLY_PLAYED_LIMIT = 5
-        const val SECTION_LIMIT = 10
+        const val RECENTLY_PLAYED_LIMIT = 3
+        const val ARTISTS_LIMIT = 5
+        const val ALBUMS_LIMIT = 4
     }
 }
 
-/** Agrupa por álbum + artista y devuelve los más recientes primero. */
+/**
+ * Artistas más recientes: primero los de reproducciones recientes,
+ * luego el resto por fecha de adición de sus pistas.
+ */
+private fun buildRecentArtists(
+    songs: List<Song>,
+    recentlyPlayed: List<Song>
+): List<String> {
+    val ordered = LinkedHashSet<String>()
+    recentlyPlayed.forEach { song ->
+        song.artist.takeIf { it.isNotBlank() }?.let { ordered.add(it) }
+    }
+    songs
+        .sortedByDescending { it.dateAdded }
+        .forEach { song ->
+            song.artist.takeIf { it.isNotBlank() }?.let { ordered.add(it) }
+        }
+    return ordered.take(5).toList()
+}
+
+/** Agrupa por álbum + artista; los más recientes primero (máx. 4). */
 private fun buildRecentAlbums(songs: List<Song>): List<HomeAlbumData> =
     songs
         .groupBy { song ->
@@ -112,4 +108,4 @@ private fun buildRecentAlbums(songs: List<Song>): List<HomeAlbumData> =
             HomeAlbumData(title, artist, coverPath, dateAdded)
         }
         .sortedByDescending { it.dateAdded }
-        .take(10)
+        .take(4)

@@ -2,32 +2,34 @@ package com.twedmusic.app.feature.tabs.home.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.twedmusic.app.R
 import com.twedmusic.app.core.database.TotalStats
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
+
 /**
- * Panel de estadísticas con 3 columnas separadas por divisores verticales.
- * Muestra: reproducciones totales, completadas y tiempo de escucha.
- * Diseño minimalista: solo valor + label, sin iconos circulares.
- *
- * @param stats Objeto [TotalStats] con los datos agregados.
- * @param formattedTime Texto ya formateado del tiempo (ej. "342 h" o "45 min").
+ * Panel "Tu actividad": 3 cards (reproducciones / completadas / tiempo).
  */
 @Composable
 fun StatsPanel(
@@ -38,116 +40,87 @@ fun StatsPanel(
     timeLabel: String,
     modifier: Modifier = Modifier
 ) {
-    val surfaceL1 = MaterialTheme.colorScheme.surfaceVariant
-    val borderL1 = MaterialTheme.colorScheme.outline
-    val titleColor = LocalListItemTitleColor.current
-    val subtitleColor = LocalListItemSubtitleColor.current
-
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(surfaceL1)
-            .padding(vertical = 16.dp, horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Stat 1: Reproducciones totales
-        StatColumn(
+        StatCard(
+            iconRes = R.drawable.ic_play_arrow_filled,
             value = formatStatNumber(stats.totalPlays),
             label = totalPlaysLabel,
-            titleColor = titleColor,
-            subtitleColor = subtitleColor,
             modifier = Modifier.weight(1f)
         )
-
-        // Divisor
-        Box(
-            modifier = Modifier
-                .width(1.dp)
-                .fillMaxHeight(0.7f)
-                .background(borderL1)
-        )
-
-        // Stat 2: Completadas
-        StatColumn(
+        StatCard(
+            iconRes = R.drawable.ic_check,
             value = formatStatNumber(stats.totalCompleted),
             label = completedLabel,
-            titleColor = titleColor,
-            subtitleColor = subtitleColor,
             modifier = Modifier.weight(1f)
         )
-
-        // Divisor
-        Box(
-            modifier = Modifier
-                .width(1.dp)
-                .fillMaxHeight(0.7f)
-                .background(borderL1)
-        )
-
-        // Stat 3: Tiempo
-        StatColumn(
+        StatCard(
+            iconRes = R.drawable.ic_timer_filled,
             value = formattedTime,
             label = timeLabel,
-            titleColor = titleColor,
-            subtitleColor = subtitleColor,
             modifier = Modifier.weight(1f)
         )
     }
 }
 
-/**
- * Columna individual de estadística dentro del panel.
- * Solo muestra el valor numérico y su label (sin icono).
- */
 @Composable
-private fun StatColumn(
+private fun StatCard(
+    iconRes: Int,
     value: String,
     label: String,
-    titleColor: androidx.compose.ui.graphics.Color,
-    subtitleColor: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier
 ) {
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    val titleColor = LocalListItemTitleColor.current
+    val subtitleColor = LocalListItemSubtitleColor.current
+
     Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(surface)
+            .padding(vertical = 14.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Valor
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = titleColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium,
             color = titleColor,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
-
-        // Label
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Light
+            ),
             color = subtitleColor,
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = MaterialTheme.typography.labelSmall.lineHeight
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
     }
 }
 
-/**
- * Formatea un número de reproducciones con separador de miles (punto).
- * Ej: 12480 → "12.480"
- */
 private fun formatStatNumber(value: Int): String {
-    return if (value >= 1000) {
-        val str = value.toString()
-        val result = StringBuilder()
-        for (i in str.indices) {
-            if (i > 0 && (str.length - i) % 3 == 0) {
-                result.append('.')
-            }
-            result.append(str[i])
-        }
-        result.toString()
-    } else {
-        value.toString()
+    if (value < 1000) return value.toString()
+    val str = value.toString()
+    val result = StringBuilder()
+    for (i in str.indices) {
+        if (i > 0 && (str.length - i) % 3 == 0) result.append('.')
+        result.append(str[i])
     }
+    return result.toString()
 }

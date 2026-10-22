@@ -5,93 +5,77 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size
 import com.twedmusic.app.R
 import com.twedmusic.app.core.database.TotalStats
-import com.twedmusic.app.core.model.Song
-import com.twedmusic.app.feature.tabs.home.components.HomeAlbumCard
-import com.twedmusic.app.feature.tabs.home.components.HomeArtistCard
-import com.twedmusic.app.feature.tabs.home.components.HomeSectionHeader
-import com.twedmusic.app.feature.tabs.home.components.HomeTrackCard
-import com.twedmusic.app.feature.tabs.home.components.PlaylistCard
-import com.twedmusic.app.feature.tabs.home.components.ResumeCard
-import com.twedmusic.app.feature.tabs.home.components.ShuffleAllButton
-import com.twedmusic.app.feature.tabs.home.components.StatsPanel
+import com.twedmusic.app.core.designsystem.theme.LocalCardL2Color
+import com.twedmusic.app.core.designsystem.theme.LocalCoverPlaceholderIconColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
-import com.twedmusic.app.core.designsystem.theme.LocalTracksCountTextColor
-import java.util.Calendar
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.twedmusic.app.core.model.Song
+import com.twedmusic.app.feature.tabs.home.components.HomeArtistCard
+import com.twedmusic.app.feature.tabs.home.components.HomeRecentTrackRow
+import com.twedmusic.app.feature.tabs.home.components.HomeSectionHeader
+import com.twedmusic.app.feature.tabs.home.components.StatsPanel
 import java.io.File
 
 /**
- * Pantalla de inicio de TwedMusic (rediseño basado en mockup HTML).
+ * Pantalla de inicio (boceto definitivo).
  *
- * Muestra un resumen vivo de la actividad musical del usuario con
- * secciones jerárquicas:
+ * 1. Título "Inicio"
+ * 2. Tu actividad (3 stats con iconos)
+ * 3. Reproducidas recientemente (3 filas)
+ * 4. Tus artistas (5 círculos, más recientes)
+ * 5. Álbumes (4 cards, 2×2)
  *
- * 1. **Saludo personalizado** según la hora del día
- * 2. **Seguir escuchando**: card con la última canción reproducida
- * 3. **Tu actividad**: panel de estadísticas agregadas
- * 4. **Reproducir todo aleatoriamente**: botón grande con contador
- * 5. **Escuchado recientemente**: fila horizontal de canciones
- * 6. **Tus artistas**: fila horizontal de artistas con avatar circular
- * 7. **Agregado recientemente**: fila horizontal de canciones recientes
- * 8. **Playlists**: grid 2 columnas de playlists con mosaicos
- * 9. **Álbumes**: fila horizontal de álbumes recientes
- *
- * @param modifier Modificador de Compose opcional.
+ * Sin playlists, sin atribución Deezer, sin saludo / shuffle / resume.
  */
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
-    val attributionColor = LocalTracksCountTextColor.current
-    val titleColor = LocalListItemTitleColor.current
-    val subtitleColor = LocalListItemSubtitleColor.current
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = MaterialTheme.colorScheme.background
+    val titleColor = LocalListItemTitleColor.current
 
-    // Todo el estado de la pantalla viene del ViewModel
-    val state by viewModel.uiState.collectAsState()
-    val totalStats = state.totalStats
-    val recentlyPlayed = state.recentlyPlayed
-    val recentlyAdded = state.recentlyAdded
-    val uniqueArtists = state.uniqueArtists
-    val recentAlbums = state.recentAlbums
-    val songCount = state.songCount
-
-    // Saludo según hora del día
-    val greeting = rememberGreeting()
-
-    // Canción para "Seguir escuchando": la más reciente reproducida
-    val resumeSong = recentlyPlayed.firstOrNull()
-
-    // Tiempo formateado para el panel de estadísticas
-    val formattedTime = formatPlayedTime(totalStats.totalPlayedMs)
-
-    // Strings localizados
-    val statsTitle = stringResource(R.string.home_total_plays)
+    val formattedTime = formatPlayedTime(uiState.totalStats.totalPlayedMs)
+    val playsLabel = stringResource(R.string.home_total_plays)
     val completedLabel = stringResource(R.string.home_completed_plays)
     val timeLabel = stringResource(R.string.home_hours_listened)
-    val shuffleTitle = stringResource(R.string.home_shuffle_all)
-    val shuffleCount = stringResource(R.string.home_shuffle_count, songCount)
 
     Box(
         modifier = modifier
@@ -106,174 +90,77 @@ fun HomeScreen(
                 top = 8.dp,
                 bottom = 24.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(26.dp)
+            verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
-            // ── Saludo ──
-            item(key = "greeting") {
+            item(key = "title") {
                 Text(
-                    text = greeting,
+                    text = stringResource(R.string.home_screen_placeholder),
                     style = MaterialTheme.typography.headlineMedium,
                     color = titleColor,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(top = 10.dp)
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
 
-            // ── Seguir escuchando ──
-            if (resumeSong != null) {
-                item(key = "resume_section") {
-                    ResumeSection(
-                        song = resumeSong,
-                        coverFileOf = viewModel::coverFile
+            // Tu actividad: siempre visible (0 si no hay datos)
+            item(key = "stats") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.home_your_activity),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = titleColor,
+                        fontWeight = FontWeight.SemiBold
                     )
-                }
-            }
-
-            // ── Tu actividad ──
-            if (totalStats.totalPlays > 0) {
-                item(key = "stats_section") {
-                    StatsSection(
-                        stats = totalStats,
+                    StatsPanel(
+                        stats = uiState.totalStats,
                         formattedTime = formattedTime,
-                        statsTitle = statsTitle,
+                        totalPlaysLabel = playsLabel,
                         completedLabel = completedLabel,
                         timeLabel = timeLabel
                     )
                 }
             }
 
-            // ── Shuffle all ──
-            if (songCount > 0) {
-                item(key = "shuffle") {
-                    ShuffleAllButton(
-                        titleText = shuffleTitle,
-                        countText = shuffleCount,
-                        onClick = { /* TODO: shuffle all */ }
-                    )
-                }
-            }
-
-            // ── Escuchado recientemente ──
-            if (recentlyPlayed.isNotEmpty()) {
-                item(key = "recent_section") {
+            if (uiState.recentlyPlayed.isNotEmpty()) {
+                item(key = "recent") {
                     RecentlyPlayedSection(
-                        songs = recentlyPlayed,
+                        songs = uiState.recentlyPlayed,
                         coverFileOf = viewModel::coverFile
                     )
                 }
             }
 
-            // ── Tus artistas ──
-            if (uniqueArtists.isNotEmpty()) {
-                item(key = "artists_section") {
+            if (uiState.recentArtists.isNotEmpty()) {
+                item(key = "artists") {
                     ArtistsSection(
-                        artists = uniqueArtists,
+                        artists = uiState.recentArtists,
                         artistImageFileOf = viewModel::artistImageFile
                     )
                 }
             }
 
-            // ── Agregado recientemente ──
-            if (recentlyAdded.isNotEmpty()) {
-                item(key = "added_section") {
-                    RecentlyAddedSection(
-                        songs = recentlyAdded,
+            if (uiState.recentAlbums.isNotEmpty()) {
+                item(key = "albums") {
+                    AlbumsGridSection(
+                        albums = uiState.recentAlbums,
                         coverFileOf = viewModel::coverFile
                     )
                 }
             }
 
-            // ── Playlists ──
-            item(key = "playlists_section") {
-                PlaylistsSection()
-            }
-
-            // ── Álbumes ──
-            if (recentAlbums.isNotEmpty()) {
-                item(key = "albums_section") {
-                    AlbumsSection(
-                        albums = recentAlbums,
-                        coverFileOf = viewModel::coverFile
-                    )
-                }
-            }
-
-            // ── Estado vacío ──
-            if (songCount == 0 && totalStats.totalPlays == 0) {
-                item(key = "empty_state") {
-                    Box(
+            if (uiState.songCount == 0 && uiState.totalStats.totalPlays == 0) {
+                item(key = "empty") {
+                    Text(
+                        text = stringResource(R.string.home_no_stats),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LocalListItemSubtitleColor.current,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.home_no_stats),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = subtitleColor
-                        )
-                    }
+                            .padding(vertical = 32.dp)
+                    )
                 }
             }
         }
-
-        // Atribución de Deezer (términos de uso)
-        Text(
-            text = stringResource(R.string.artist_images_attribution),
-            style = MaterialTheme.typography.labelSmall,
-            color = attributionColor,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 20.dp, top = 8.dp)
-        )
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SECCIONES HELPER
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ResumeSection(
-    song: Song,
-    coverFileOf: (String) -> File?
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HomeSectionHeader(
-            title = stringResource(R.string.home_resume_section),
-            showSeeAll = false
-        )
-        ResumeCard(
-            title = song.title,
-            artist = song.artist,
-            context = stringResource(R.string.home_resume_playing_from),
-            coverFile = coverFileOf(song.path),
-            onCardClick = { /* TODO: navegar */ }
-        )
-    }
-}
-
-@Composable
-private fun StatsSection(
-    stats: TotalStats,
-    formattedTime: String,
-    statsTitle: String,
-    completedLabel: String,
-    timeLabel: String
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HomeSectionHeader(
-            title = stringResource(R.string.home_your_activity),
-            showSeeAll = true,
-            onSeeAllClick = { /* TODO: navegar a stats */ }
-        )
-        StatsPanel(
-            stats = stats,
-            formattedTime = formattedTime,
-            totalPlaysLabel = statsTitle,
-            completedLabel = completedLabel,
-            timeLabel = timeLabel
-        )
     }
 }
 
@@ -282,27 +169,19 @@ private fun RecentlyPlayedSection(
     songs: List<Song>,
     coverFileOf: (String) -> File?
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HomeSectionHeader(
             title = stringResource(R.string.home_recently_played),
-            showSeeAll = true,
-            onSeeAllClick = { /* TODO: navegar a historial */ }
+            showSeeAll = false
         )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = 4.dp)
-        ) {
-            items(
-                items = songs,
-                key = { "recent-${it.id}" }
-            ) { song ->
-                HomeTrackCard(
-                    title = song.title,
-                    subtitle = song.artist,
-                    coverFile = coverFileOf(song.path),
-                    onClick = { /* TODO: reproducir */ }
-                )
-            }
+        songs.forEach { song ->
+            HomeRecentTrackRow(
+                title = song.title,
+                artist = song.artist,
+                coverFile = song.path.takeIf { it.isNotBlank() }?.let { coverFileOf(it) },
+                onClick = { /* TODO: play */ },
+                onMoreClick = { /* TODO: menú */ }
+            )
         }
     }
 }
@@ -316,7 +195,7 @@ private fun ArtistsSection(
         HomeSectionHeader(
             title = stringResource(R.string.home_your_artists),
             showSeeAll = true,
-            onSeeAllClick = { /* TODO: navegar a artistas */ }
+            onSeeAllClick = { /* TODO: Artistas */ }
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -325,12 +204,11 @@ private fun ArtistsSection(
             items(
                 items = artists,
                 key = { "artist-$it" }
-            ) { artistName ->
-                val imageFile = artistImageFileOf(artistName)
+            ) { name ->
                 HomeArtistCard(
-                    artistName = artistName,
-                    imageFile = imageFile,
-                    onClick = { /* TODO: navegar a detalle artista */ }
+                    artistName = name,
+                    imageFile = artistImageFileOf(name),
+                    onClick = { /* TODO */ }
                 )
             }
         }
@@ -338,91 +216,7 @@ private fun ArtistsSection(
 }
 
 @Composable
-private fun RecentlyAddedSection(
-    songs: List<Song>,
-    coverFileOf: (String) -> File?
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HomeSectionHeader(
-            title = stringResource(R.string.home_recently_added),
-            showSeeAll = true,
-            onSeeAllClick = { /* TODO: navegar */ }
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = 4.dp)
-        ) {
-            items(
-                items = songs,
-                key = { "added-${it.id}" }
-            ) { song ->
-                HomeTrackCard(
-                    title = song.title,
-                    subtitle = song.artist,
-                    coverFile = coverFileOf(song.path),
-                    onClick = { /* TODO: reproducir */ }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistsSection() {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HomeSectionHeader(
-            title = stringResource(R.string.home_playlists),
-            showSeeAll = true,
-            onSeeAllClick = { /* TODO: navegar a playlists */ }
-        )
-        // Grid manual 2x2 (evita LazyVerticalGrid anidado en LazyColumn)
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Fila 1
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                PlaylistCard(
-                    title = "Playlist 1",
-                    countText = stringResource(R.string.home_songs_count, 0),
-                    coverFiles = emptyList(),
-                    modifier = Modifier.weight(1f),
-                    onClick = { /* TODO: navegar */ }
-                )
-                PlaylistCard(
-                    title = "Playlist 2",
-                    countText = stringResource(R.string.home_songs_count, 0),
-                    coverFiles = emptyList(),
-                    modifier = Modifier.weight(1f),
-                    onClick = { /* TODO: navegar */ }
-                )
-            }
-            // Fila 2
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                PlaylistCard(
-                    title = "Playlist 3",
-                    countText = stringResource(R.string.home_songs_count, 0),
-                    coverFiles = emptyList(),
-                    modifier = Modifier.weight(1f),
-                    onClick = { /* TODO: navegar */ }
-                )
-                PlaylistCard(
-                    title = "Playlist 4",
-                    countText = stringResource(R.string.home_songs_count, 0),
-                    coverFiles = emptyList(),
-                    modifier = Modifier.weight(1f),
-                    onClick = { /* TODO: navegar */ }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlbumsSection(
+private fun AlbumsGridSection(
     albums: List<HomeAlbumData>,
     coverFileOf: (String) -> File?
 ) {
@@ -430,52 +224,110 @@ private fun AlbumsSection(
         HomeSectionHeader(
             title = stringResource(R.string.home_albums),
             showSeeAll = true,
-            onSeeAllClick = { /* TODO: navegar a álbumes */ }
+            onSeeAllClick = { /* TODO: Álbumes */ }
         )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = 4.dp)
-        ) {
-            items(
-                items = albums,
-                key = { "album-${it.title}|${it.artist}" }
-            ) { album ->
-                HomeAlbumCard(
-                    title = album.title,
-                    artist = album.artist,
-                    coverFile = album.coverPath?.let { coverFileOf(it) },
-                    onClick = { /* TODO: navegar a detalle álbum */ }
-                )
+        // 2 columnas × 2 filas (máx. 4)
+        val rows = albums.chunked(2)
+        rows.forEach { rowAlbums ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowAlbums.forEach { album ->
+                    HomeAlbumGridCard(
+                        title = album.title,
+                        artist = album.artist,
+                        coverFile = album.coverPath?.let { coverFileOf(it) },
+                        modifier = Modifier.weight(1f),
+                        onClick = { /* TODO */ }
+                    )
+                }
+                if (rowAlbums.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+            if (rowAlbums !== rows.last()) {
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FUNCIONES UTILITARIAS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Genera el saludo según la hora del día (HOUR_OF_DAY, 0-23).
- * - Madrugada/noche (20:00-04:59): "Buenas noches"
- * - Mañana (05:00-11:59): "Buenos días"
- * - Tarde (12:00-19:59): "Buenas tardes"
- */
+/** Card de álbum a ancho de columna (estilo grid AlbumsScreen). */
 @Composable
-private fun rememberGreeting(): String {
-    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    return when (hour) {
-        in 5..11 -> stringResource(R.string.home_greeting_morning)
-        in 12..19 -> stringResource(R.string.home_greeting_afternoon)
-        else -> stringResource(R.string.home_greeting_night)
+private fun HomeAlbumGridCard(
+    title: String,
+    artist: String,
+    coverFile: File?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val surfaceL2 = LocalCardL2Color.current
+    val titleColor = LocalListItemTitleColor.current
+    val subtitleColor = LocalListItemSubtitleColor.current
+    val placeholderIcon = LocalCoverPlaceholderIconColor.current
+    val density = LocalDensity.current
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(surfaceL2),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_album_filled),
+                contentDescription = null,
+                tint = placeholderIcon,
+                modifier = Modifier.size(40.dp)
+            )
+            if (coverFile != null) {
+                val sidePx = with(density) { 160.dp.roundToPx() }
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(coverFile)
+                        .size(Size(sidePx, sidePx))
+                        .build(),
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = titleColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = artist,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            ),
+            color = subtitleColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
-/**
- * Formatea milisegundos reproducidos a formato legible:
- * - Si >= 1 hora: "X h Y min"
- * - Si < 1 hora: "Y min"
- */
 @Composable
 private fun formatPlayedTime(playedMs: Long): String {
     val totalMinutes = playedMs / 60_000
@@ -487,4 +339,3 @@ private fun formatPlayedTime(playedMs: Long): String {
         stringResource(R.string.home_only_minutes_format, minutes.toInt())
     }
 }
-
