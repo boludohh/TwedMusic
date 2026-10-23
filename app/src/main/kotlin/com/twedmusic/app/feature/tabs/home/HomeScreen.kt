@@ -46,7 +46,7 @@ private val HomeBottomPadding = 8.dp
  * Pantalla de inicio (boceto definitivo).
  *
  * 1. Título "Inicio" — 36sp Bold
- * 2. Tu actividad
+ * 2. Tu actividad — 18sp Medium
  * 3. Reproducidas recientemente (3)
  * 4. Tus artistas (5 por dateAdded)
  * 5. Álbumes (4 AlbumCard, gap 14.dp)
@@ -94,10 +94,10 @@ fun HomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         text = stringResource(R.string.home_your_activity),
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = 24.sp,
-                            lineHeight = 32.sp,
-                            fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = 18.sp,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.Medium
                         ),
                         color = titleColor
                     )
