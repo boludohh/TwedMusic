@@ -22,11 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.twedmusic.app.R
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
+import com.twedmusic.app.core.designsystem.theme.LocalScreenTitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
+import com.twedmusic.app.core.designsystem.theme.screenTitle
 import com.twedmusic.app.core.model.Album
 import com.twedmusic.app.core.model.Song
 import com.twedmusic.app.feature.tabs.albums.components.AlbumCard
@@ -36,14 +39,17 @@ import com.twedmusic.app.feature.tabs.home.components.HomeSectionHeader
 import com.twedmusic.app.feature.tabs.home.components.StatsPanel
 import java.io.File
 
+/** Mismo padding inferior que AlbumsScreen (GridBottomPadding). */
+private val HomeBottomPadding = 8.dp
+
 /**
  * Pantalla de inicio (boceto definitivo).
  *
- * 1. Título "Inicio"
- * 2. Tu actividad (panel único)
+ * 1. Título "Inicio" — 36sp Bold
+ * 2. Tu actividad
  * 3. Reproducidas recientemente (3)
- * 4. Tus artistas (5 por dateAdded de biblioteca)
- * 5. Álbumes (4 AlbumCard, grid 2×2, gap 14.dp H/V)
+ * 4. Tus artistas (5 por dateAdded)
+ * 5. Álbumes (4 AlbumCard, gap 14.dp)
  */
 @Composable
 fun HomeScreen(
@@ -52,6 +58,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = MaterialTheme.colorScheme.background
+    val screenTitleColor = LocalScreenTitleColor.current
     val titleColor = LocalListItemTitleColor.current
 
     val formattedTime = formatPlayedTime(uiState.totalStats.totalPlayedMs)
@@ -70,16 +77,15 @@ fun HomeScreen(
                 start = 20.dp,
                 end = 20.dp,
                 top = 8.dp,
-                bottom = 24.dp
+                bottom = HomeBottomPadding
             ),
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             item(key = "title") {
                 Text(
                     text = stringResource(R.string.home_screen_placeholder),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = titleColor,
-                    fontWeight = FontWeight.Bold,
+                    style = screenTitle(),
+                    color = screenTitleColor,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -88,9 +94,12 @@ fun HomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         text = stringResource(R.string.home_your_activity),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = titleColor,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontSize = 24.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = titleColor
                     )
                     StatsPanel(
                         stats = uiState.totalStats,
@@ -196,13 +205,6 @@ private fun ArtistsSection(
     }
 }
 
-/**
- * Grid 2×2 con [AlbumCard] de AlbumsScreen.
- *
- * Importante: el gap vertical es SOLO [Arrangement.spacedBy] (14.dp)
- * en el Column del grid. No mezclar spacedBy del padre + Spacer,
- * porque se suman y el hueco queda \~26.dp.
- */
 @Composable
 private fun AlbumsGridSection(
     albums: List<Album>,
@@ -216,7 +218,6 @@ private fun AlbumsGridSection(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Solo este spacedBy controla el gap entre filas (= AlbumsScreen)
         Column(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
