@@ -1,6 +1,7 @@
 package com.twedmusic.app.feature.tabs.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -39,9 +40,11 @@ import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 import java.io.File
 
+private val CoverCorner = 8.dp
+
 /**
  * Fila de pista en "Reproducidas recientemente" (Home).
- * Carátula 48dp + título/artista + menú ⋮.
+ * Carátula 48dp con borde + título/artista + menú ⋮.
  */
 @Composable
 fun HomeRecentTrackRow(
@@ -56,6 +59,7 @@ fun HomeRecentTrackRow(
     val subtitleColor = LocalListItemSubtitleColor.current
     val placeholderBg = LocalCardL2Color.current
     val placeholderIcon = LocalCoverPlaceholderIconColor.current
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
     val density = LocalDensity.current
     val thumbPx = with(density) { 48.dp.roundToPx() }
     val rowInteraction = remember { MutableInteractionSource() }
@@ -75,8 +79,9 @@ fun HomeRecentTrackRow(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(placeholderBg),
+                .clip(RoundedCornerShape(CoverCorner))
+                .background(placeholderBg)
+                .border(1.dp, borderColor, RoundedCornerShape(CoverCorner)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -95,7 +100,7 @@ fun HomeRecentTrackRow(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(CoverCorner))
                 )
             }
         }

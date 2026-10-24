@@ -1,6 +1,7 @@
 package com.twedmusic.app.feature.tabs.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,14 +33,6 @@ import com.twedmusic.app.core.designsystem.theme.LocalCoverPlaceholderIconColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 import java.io.File
 
-/**
- * Card circular de artista para LazyRow horizontal en HomeScreen.
- * Muestra un avatar circular de 72dp con el nombre debajo.
- *
- * @param artistName Nombre del artista.
- * @param imageFile Archivo de imagen del artista, null para placeholder.
- * @param onClick Callback al tocar la card.
- */
 @Composable
 fun HomeArtistCard(
     artistName: String,
@@ -50,6 +43,7 @@ fun HomeArtistCard(
     val surfaceL2 = LocalCardL2Color.current
     val titleColor = LocalListItemTitleColor.current
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier = modifier
@@ -57,23 +51,20 @@ fun HomeArtistCard(
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Avatar circular 72dp
         Box(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(surfaceL2),
+                .background(surfaceL2)
+                .border(1.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            // Placeholder icon
             Icon(
                 painter = painterResource(id = R.drawable.ic_artist_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
                 modifier = Modifier.size(28.dp)
             )
-
-            // Imagen real encima
             if (imageFile != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -91,7 +82,6 @@ fun HomeArtistCard(
 
         Spacer(modifier = Modifier.height(7.dp))
 
-        // Nombre del artista
         Text(
             text = artistName,
             style = MaterialTheme.typography.bodySmall,

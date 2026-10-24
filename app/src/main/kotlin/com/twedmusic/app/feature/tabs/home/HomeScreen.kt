@@ -14,11 +14,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,14 +51,12 @@ import java.io.File
 /** Mismo padding inferior que AlbumsScreen (GridBottomPadding). */
 private val HomeBottomPadding = 8.dp
 
-/**
- * Pantalla de inicio.
- *
- * Geometría del header alineada con TracksScreen:
- * - start 24.dp (glifo del menú)
- * - Título: top 8.dp
- * - "Tu actividad": 8.dp bajo el título (como "100 pistas")
- */
+/** Altura del desvanecido superior (igual Tracks/Albums/Artists). */
+private val TopFadeHeight = 64.dp
+
+/** Scroll necesario para que el fade llegue a alfa 1.0. */
+private val ScrollFadeThreshold = 48.dp
+
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -65,13 +72,54 @@ fun HomeScreen(
     val completedLabel = stringResource(R.string.home_completed_plays)
     val timeLabel = stringResource(R.string.home_hours_listened)
 
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { ScrollFadeThreshold.toPx() }
+
+    val fadeAlpha by remember {
+        derivedStateOf {
+            val firstVisibleIndex = listState.firstVisibleItemIndex
+            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+            if (firstVisibleIndex == 0 && firstVisibleOffset == 0) {
+                0f
+            } else {
+                val scrollDistance = if (firstVisibleIndex > 0) {
+                    thresholdPx
+                } else {
+                    firstVisibleOffset.toFloat()
+                }
+                (scrollDistance / thresholdPx).coerceIn(0f, 1f)
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(backgroundColor)
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    drawContent()
+                    if (fadeAlpha > 0f) {
+                        val fadeHeightPx = TopFadeHeight.toPx()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    backgroundColor.copy(alpha = fadeAlpha),
+                                    Color.Transparent
+                                ),
+                                startY = 0f,
+                                endY = fadeHeightPx
+                            ),
+                            topLeft = Offset.Zero,
+                            size = Size(size.width, fadeHeightPx)
+                        )
+                    }
+                },
             contentPadding = PaddingValues(
                 start = 24.dp,
                 end = 20.dp,

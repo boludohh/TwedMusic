@@ -38,8 +38,8 @@ private val IconSize = 22.dp
 private val BorderWidth = 1.dp
 
 /**
- * Panel único "Tu actividad": tres stats en una sola superficie
- * con borde; iconos sobre círculo (card L2) también con borde.
+ * Panel único "Tu actividad": borde solo en la card;
+ * círculos de iconos sin borde.
  */
 @Composable
 fun StatsPanel(
@@ -94,7 +94,6 @@ private fun StatItem(
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val circleColor = LocalCardL2Color.current
-    val circleBorder = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier = modifier,
@@ -104,8 +103,7 @@ private fun StatItem(
             modifier = Modifier
                 .size(CircleSize)
                 .clip(CircleShape)
-                .background(circleColor)
-                .border(BorderWidth, circleBorder, CircleShape),
+                .background(circleColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
