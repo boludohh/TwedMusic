@@ -1,6 +1,7 @@
 package com.twedmusic.app.feature.tabs.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +32,14 @@ import com.twedmusic.app.core.designsystem.theme.LocalCardL2Color
 import com.twedmusic.app.core.designsystem.theme.LocalListItemSubtitleColor
 import com.twedmusic.app.core.designsystem.theme.LocalListItemTitleColor
 
+private val PanelCorner = 16.dp
+private val CircleSize = 44.dp
+private val IconSize = 22.dp
+private val BorderWidth = 1.dp
+
 /**
- * Panel único "Tu actividad": tres stats en una sola superficie,
- * iconos sobre círculo (card L2) con padding limpio respecto al borde.
+ * Panel único "Tu actividad": tres stats en una sola superficie
+ * con borde; iconos sobre círculo (card L2) también con borde.
  */
 @Composable
 fun StatsPanel(
@@ -45,12 +51,14 @@ fun StatsPanel(
     modifier: Modifier = Modifier
 ) {
     val panelColor = MaterialTheme.colorScheme.surfaceVariant
+    val borderColor = MaterialTheme.colorScheme.outline
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(PanelCorner))
             .background(panelColor)
+            .border(BorderWidth, borderColor, RoundedCornerShape(PanelCorner))
             .padding(horizontal = 12.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
@@ -86,6 +94,7 @@ private fun StatItem(
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val circleColor = LocalCardL2Color.current
+    val circleBorder = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier = modifier,
@@ -93,16 +102,17 @@ private fun StatItem(
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(CircleSize)
                 .clip(CircleShape)
-                .background(circleColor),
+                .background(circleColor)
+                .border(BorderWidth, circleBorder, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = painterResource(iconRes),
                 contentDescription = null,
                 tint = titleColor,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(IconSize)
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
