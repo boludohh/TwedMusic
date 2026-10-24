@@ -46,10 +46,9 @@ private val HomeBottomPadding = 8.dp
  * Pantalla de inicio.
  *
  * Geometría del header alineada con TracksScreen:
- * - Viewport top (MainScreen): 43.dp
- * - Título: padding top 8.dp (sin +4 extra)
- * - start 24.dp: alineado con el glifo del menú
- * - "Tu actividad": 8.dp bajo el título (igual que "100 pistas")
+ * - start 24.dp (glifo del menú)
+ * - Título: top 8.dp
+ * - "Tu actividad": 8.dp bajo el título (como "100 pistas")
  */
 @Composable
 fun HomeScreen(
@@ -74,23 +73,18 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                // start/end del contenido general; el header usa 24.dp como Tracks
-                start = 20.dp,
+                start = 24.dp,
                 end = 20.dp,
                 top = 0.dp,
                 bottom = HomeBottomPadding
             ),
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
-            // Header + Tu actividad + Stats en un solo item
-            // para que el gap título→sección sea 8.dp (no el spacedBy 28)
             item(key = "header_stats") {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // Igual que TracksScreen: start 24, top 8
-                        // (20.dp del contentPadding + 4.dp = 24.dp ópticos)
-                        .padding(start = 4.dp, top = 8.dp)
+                        .padding(top = 8.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.home_screen_placeholder),
@@ -98,7 +92,6 @@ fun HomeScreen(
                         color = screenTitleColor
                     )
 
-                    // Mismo gap que "Pistas" → "100 pistas"
                     Text(
                         text = stringResource(R.string.home_your_activity),
                         style = MaterialTheme.typography.titleMedium.copy(
@@ -112,14 +105,12 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Stats a ancho completo del contentPadding (sin el +4 del título)
                     StatsPanel(
                         stats = uiState.totalStats,
                         formattedTime = formattedTime,
                         totalPlaysLabel = playsLabel,
                         completedLabel = completedLabel,
-                        timeLabel = timeLabel,
-                        modifier = Modifier.padding(start = (-4).dp)
+                        timeLabel = timeLabel
                     )
                 }
             }
